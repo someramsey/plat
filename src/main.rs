@@ -1,108 +1,79 @@
 #![allow(unused)]
+#![allow(clippy::needless_return)]
 
-mod loader;
-
+use std::collections::HashMap;
 use clap::{Arg, Command};
 use std::env;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Seek, Write};
 use std::path::PathBuf;
+use std::thread::sleep;
 
-fn get_data_file() -> File {
+fn open_data_file() -> File {
     let path = env::current_exe()
-        .expect("Get executable path")
+        .expect("Get current executable path")
         .parent()
-        .expect("Get executable directory")
-        .join("templates");
+        .expect("Get parent directory of executable")
+        .join(".platdata");;
 
     return OpenOptions::new()
         .create(true)
         .read(true)
         .write(true)
         .open(path)
-        .expect("Open data file");
+        .expect("Open config file");
 }
 
-fn get_template_config_path() -> PathBuf {
-    let path = env::current_dir()
-        .expect("Get current directory")
-        .join(".plat");
+fn read_data_file() -> HashMap<String, String> {
+    let mut map: HashMap<String, String> = HashMap::new();
 
-    return path;
-}
-
-fn init_template_config(path: &PathBuf) {
-    if path.exists() {
-        return;
-    }
-
-    let mut file = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .open(path)
-        .expect("Open template config file");
-
-    let current_dir = env::current_dir()
-        .expect("Get current directory");
-    let template_name = current_dir
-        .file_name()
-        .expect("Get current directory name")
-        .to_str()
-        .expect("Convert directory name to string");
-
-    writeln!(file, "${}", template_name)
-        .expect("Write template name to config file");
-}
-
-
-fn unlink() {
-    let mut data_file = get_data_file();
-
-    let config_path = get_template_config_path();
-    let config_path_str = config_path.to_str()
-        .expect("Convert template path to string");
-
+    let mut data_file = open_data_file();
     let reader = BufReader::new(&data_file);
-    let lines: Vec<String> = reader.lines()
-        .map(|line| line.expect("Read line from data file"))
-        .filter(|line| line != config_path_str)
-        .collect();
 
-    data_file.set_len(0).expect("Truncate data file");
+    for line in reader.lines() {
+        let line = line.expect("Read line from file");
 
-    data_file.seek(std::io::SeekFrom::Start(0))
-        .expect("Seek to beginning of data file");
+        if let Some(pos) = line.find('|') {
+            let name = &line[..pos];
+            let path = &line[pos + 1..];
 
-    for line in lines {
-        writeln!(data_file, "{}", line)
-            .expect("Write line to data file");
+            map.insert(name.to_string(), path.to_string());
+        }
     }
 
-    println!("Template unlinked successfully.");
+    return map;
 }
 
-fn link() {
-    let mut data_file = get_data_file();
+fn write_data_file(data: &HashMap<String, String>) {
+    let mut data_file = open_data_file();
 
-    let config_path = get_template_config_path();
-    let config_path_str = config_path.to_str()
-        .expect("Convert template path to string");
+    data_file.set_len(0).expect("Truncate file");
+    data_file.seek(std::io::SeekFrom::Start(0)).expect("Seek to start of file");
 
-    init_template_config(&config_path);
-
-    let reader = BufReader::new(&data_file);
-    let contains = reader.lines()
-        .map(|line| line.expect("Read line from data file"))
-        .any(|line| line == config_path_str);
-
-    if (!contains) {
-        writeln!(data_file, "{}", config_path_str)
-            .expect("Write template path to data file");
-
-        println!("Template linked successfully.");
-    } else {
-        println!("Template already linked.");
+    for (name, path) in data {
+        writeln!(data_file, "{}|{}", name, path).expect("Write to file");
     }
+}
+
+fn load(origin: PathBuf, target: PathBuf) {
+    let mut options = fs_extra::dir::CopyOptions::new()
+        .copy_inside(true)
+        .overwrite(true);
+
+    let progress_bar = indicatif::ProgressBar::new(1000);
+
+    fs_extra::dir::copy_with_progress(&origin, &target, &options, |info| {
+        let progress = (info.copied_bytes as f64 / info.total_bytes as f64 * 1000.0) as u64;
+
+        progress_bar.set_position(progress);
+        progress_bar.tick();
+
+        return fs_extra::dir::TransitProcessResult::ContinueOrAbort;
+    }).expect("Copy files");
+
+    progress_bar.finish();
+
+    println!("Template loaded successfully.");
 }
 
 fn main() {
@@ -118,18 +89,103 @@ fn main() {
                     .index(1)),
         )
         .subcommand(Command::new("link")
+            .arg(Arg::new("name")
+                .help("The name of the template")
+                .index(1))
             .about("Links the current directory as a template"))
         .subcommand(Command::new("unlink")
-            .about("Unlinks the current directory as a template"));
+            .about("Unlinks the current directory as a template"))
+        .subcommand(Command::new("list")
+            .alias("ls")
+            .about("Lists all linked templates"));
 
     let matches = app.clone().get_matches();
 
+    let current_dir = env::current_dir()
+        .expect("Get current directory");
+
     match matches.subcommand() {
-        Some(("link", _)) => link(),
-        Some(("unlink", _)) => unlink(),
-        Some(("load", load_matches)) => {
-            loader::load(load_matches.get_one::<String>("name"));
+        Some(("link", submatches)) => {
+            let mut data = read_data_file();
+
+            let name = submatches.get_one::<String>("name")
+                .map_or_else(|| {
+                    return dialoguer::Input::new()
+                        .with_prompt("Enter a name for the template")
+                        .interact()
+                        .expect("Prompt for template name");
+                }, |name| name.trim().to_string());
+
+            let path = current_dir.to_str()
+                .expect("Convert current directory to string");
+
+            if data.contains_key(&name) {
+                println!("A template with the name '{}' already exists, please choose a different name", name);
+                return;
+            }
+
+            if data.values().any(|v| v == path) {
+                println!("The template at '{}' is already linked.", path);
+                return;
+            }
+
+            data.insert(name.to_string(), path.to_string());
+
+            write_data_file(&data);
+
+            println!("Template {} is now linked.", name);
         }
+
+        Some(("unlink", _)) => {
+            let mut data = read_data_file();
+
+            let path = current_dir.to_str()
+                .expect("Convert current directory to string");
+
+            data.retain(|_, v| v != path);
+
+            write_data_file(&data);
+
+            println!("Template {} is now unlinked.", path);
+        }
+
+        Some(("load", load_matches)) => {
+            let name = load_matches.get_one::<String>("name")
+                .expect("Get name argument");
+            let data = read_data_file();
+
+            if let Some(path) = data.get(name) {
+                let confirmed = dialoguer::Confirm::new()
+                    .with_prompt(format!("Do you want to load the template '{}' into the current directory?", name))
+                    .interact()
+                    .expect("Prompt confirm message before loading");
+
+                if !confirmed {
+                    return;
+                }
+
+                println!("Loading template from {}", path);
+
+                load(PathBuf::from(path), current_dir);
+            } else {
+                println!("Template '{}' was not found, try checking the linked templates with 'plat list'", name);
+            }
+        }
+
+        Some(("list", _)) => {
+            let data = read_data_file();
+
+            if data.is_empty() {
+                println!("No templates linked.");
+            } else {
+                println!("Linked templates:");
+
+                for (name, path) in data {
+                    println!("{} -> {}", name, path);
+                }
+            }
+        }
+
         _ => {
             app.clone().print_help().expect("Print help");
             std::process::exit(0);
