@@ -18,3 +18,5 @@ Plat is a local template management tool that allows you to use locally stored t
 
 When linking a template you will be prompted to enter a name, the name must be unique because it works as an identifier for the template.
 
+https://github.com/user-attachments/assets/212b8cee-815f-41f1-a30b-bb2416ebeeb8
+
