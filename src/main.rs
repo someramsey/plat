@@ -60,8 +60,6 @@ fn write_data_file(data: &HashMap<String, String>) {
 }
 
 fn load(origin: PathBuf, target: PathBuf, progress_bar: ProgressBar) {
-  
-    
     let task_file_path = origin.join("task.plat");
     
     if task_file_path.exists() {
@@ -76,14 +74,7 @@ fn load(origin: PathBuf, target: PathBuf, progress_bar: ProgressBar) {
         .copy_inside(true)
         .overwrite(true);
     
-    fs_extra::dir::copy_with_progress(&origin, &target, &options, |info| {
-        let progress = (info.copied_bytes as f64 / info.total_bytes as f64 * 100.0) as u64;
-    
-        progress_bar.set_position(progress);
-        progress_bar.tick();
-    
-        return fs_extra::dir::TransitProcessResult::ContinueOrAbort;
-    }).expect("Copy files");
+    fs_extra::dir::copy(&origin, &target, &options).expect("Copy files");
 }
 
 fn main() {

@@ -1,19 +1,18 @@
-use crate::task::parser::{parse_command, TaskCommand};
-use crate::task::tokenizer::Tokenizer;
+use crate::task::parse::{parse, Instruction};
+use crate::task::tokenize::tokenize;
 
 pub fn run_task(data: &str) {
-    let mut tokenizer = Tokenizer::new(data);
+    let tokens = tokenize(data);
+    let instructions = parse(tokens);
 
-    while !tokenizer.ended {
-        match parse_command(&mut tokenizer) {
-            Ok(command) => {
-                match command {
-                    TaskCommand::Say(arg) => println!("saying {}", arg),
-                }
-            }
-
-            Err(err) =>
-                eprintln!("Error parsing command at line {} column {}: {}", tokenizer.line, tokenizer.col, err),
+    for command in instructions {
+        match command {
+            Instruction::Copy(arg) =>
+                println!("saying: {}", arg),
         }
     }
+    
+    println!("Task complete");
+    
+    
 }

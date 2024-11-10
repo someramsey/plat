@@ -1,1 +1,13 @@
-dw
+copy at "./a/*.txt"
+
+to "folder" {
+    copy at "./a" to "./a";
+    copy at "./a" to "./b";
+};
+
+at "./folder" {
+    copy at "./a" to "./c";
+    copy at "./b" to "./d";
+
+    write /dw/ $var to "./c";
+};
