@@ -61,11 +61,11 @@ fn write_data_file(data: &HashMap<String, String>) {
 
 fn load(origin: PathBuf, target: PathBuf, progress_bar: ProgressBar) {
     let task_file_path = origin.join("task.plat");
-    
+
     if task_file_path.exists() {
         let content = std::fs::read_to_string(&task_file_path)
             .expect("Read task file");
-        
+
         run_task(&content);
         return;
     }
@@ -73,7 +73,7 @@ fn load(origin: PathBuf, target: PathBuf, progress_bar: ProgressBar) {
     let mut options = fs_extra::dir::CopyOptions::new()
         .copy_inside(true)
         .overwrite(true);
-    
+
     fs_extra::dir::copy(&origin, &target, &options).expect("Copy files");
 }
 
@@ -164,14 +164,14 @@ fn main() {
                 if !confirmed {
                     return;
                 }
-                
+
                 println!("Loading template from {}", path);
-                
+
                 let origin_path = PathBuf::from(path);
                 let progress_bar = ProgressBar::new(100);
-                
+
                 load(origin_path, current_dir, progress_bar);
-                
+
                 println!("Finished loading template");
             } else {
                 println!("Template '{}' was not found, try checking the linked templates with 'plat list'", name);

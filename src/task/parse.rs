@@ -1,5 +1,8 @@
-use crate::task::tokenize::Token;
+use std::ops::Add;
+use std::path::Path;
+use crate::task::tokenize::{Token, TokenData, TokenPosition};
 use std::slice::Iter;
+use std::vec::IntoIter;
 
 pub enum Instruction {
     Copy {
@@ -10,52 +13,72 @@ pub enum Instruction {
         value: String,
         pattern: String,
         target: String,
+    },
+}
+pub enum Binding<'a> {
+    At(&'a str),
+    To(&'a str),
+}
+
+pub struct ParseError<'a> {
+    pub message: &'a str,
+    pub position: TokenPosition,
+}
+
+pub fn parse(data: Vec<Token>) -> Vec<Instruction> {
+    let mut iterator = data.into_iter();
+    let mut instructions: Vec<Instruction> = Vec::new();
+    let mut errors: Vec<ParseError> = Vec::new();
+    let mut chain: Vec<Binding> = Vec::new();
+
+    parse_scope(&mut iterator, &mut chain, &mut errors);
+
+    return instructions;
+}
+
+fn parse_base(iterator: &mut IntoIter<Token>, chain: &mut Vec<Binding>, errors: &mut Vec<ParseError>, token: Token) {
+    match &token.data {
+        TokenData::Segment(str) => {
+            match str {
+                &"at" => {
+                    parse_at(iterator, chain, errors, token);
+                }
+                _ => errors.push(ParseError { message: "Unknown segment", position: token.position })
+            }
+        }
+        _ => errors.push(ParseError { message: "Unexpected token", position: token.position })
     }
 }
 
-fn parse_command(iter: &mut Iter<Token>) -> Result<Instruction, String> {
-    let base = iter.next()
-        .ok_or("Expected command")?;
+fn parse_scope(iterator: &mut IntoIter<Token>, chain: &mut Vec<Binding>, errors: &mut Vec<ParseError>) {
+    while let Some(token) = iterator.next() {
+        match &token.data {
+            TokenData::Symbol(ch) if *ch == '}' => break,
+            _ => parse_base(iterator, chain, errors, token),
+        }
+    }
+}
 
-    if let Token::Segment(base) = base {
-        match base {
-            &"at" => {
-                let arg_token = iter.next()
-                    .ok_or("Expected argument")?;
+fn parse_at(iterator: &mut IntoIter<Token>, chain: &mut Vec<Binding>, errors: &mut Vec<ParseError>, this: Token) {
+    let target_arg = iterator.next();
 
-                let arg = match arg_token {
-                    Token::String(arg) => arg,
-                    _ => return Err("Expected string argument".to_string()),
-                };
+    if let Some(target_token) = target_arg {
+        let Token { data, position } = target_token;
 
-                let next = iter.next()
-                    .ok_or("Expected target")?;
-
-
-
-
-
+        match data {
+            TokenData::Symbol(ch) => {
+                // parse_scope(iterator, chain, errors);
             }
 
-            _ => Err(format!("Unknown command: {}", base)),
-        }
-    } else {
-        Err("Expected command segment".to_string())
-    }
-}
-pub fn parse(data: Vec<Token>) -> Vec<Instruction> {
-    let mut iter = data.iter();
-    let mut commands: Vec<Instruction> = Vec::new();
+            TokenData::String(str) => {
+                chain.push(Binding::At(str));
+            }
 
-    while let Some(token) = iter.next() {
-        match parse_command(&mut iter) {
-            Ok(command) =>
-                commands.push(command),
-
-            Err(err) =>
-                eprintln!("Error parsing command: {}", err),
+            _ => errors.push(ParseError { message: "Expected string or symbol", position }),
         }
+
+        return;
     }
 
-    return commands;
+    errors.push(ParseError { message: "Expected argument", position: this.position });
 }

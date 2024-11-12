@@ -1,11 +1,22 @@
 use std::fs;
 use std::path::PathBuf;
 
-pub enum Token<'a> {
+pub enum TokenData<'a> {
     Symbol(char),
     String(&'a str),
     Segment(&'a str),
 }
+
+pub struct TokenPosition {
+    pub line: i32,
+    pub column: i32,
+}
+
+pub struct Token<'a> {
+    pub data: TokenData<'a>,
+    pub position: TokenPosition,
+}
+
 
 enum CaptureState { Symbol, Newline, WhiteSpace, String, None }
 
@@ -47,14 +58,20 @@ pub fn tokenize(data: &str) -> Vec<Token> {
                 let word = &data[tail..head];
                 tail = head;
 
-                tokens.push(Token::Segment(word));
+                tokens.push(Token {
+                    data: TokenData::Segment(word),
+                    position: TokenPosition { line, column },
+                });
             }
         } else if !matches!(state, CaptureState::None) {
             if head - tail > 1 {
                 let word = &data[tail..head - 1];
                 tail = head;
 
-                tokens.push(Token::Segment(word));
+                tokens.push(Token {
+                    data: TokenData::Segment(word),
+                    position: TokenPosition { line, column },
+                });
             }
 
             tail = head;
@@ -68,7 +85,10 @@ pub fn tokenize(data: &str) -> Vec<Token> {
 
             CaptureState::Symbol => {
                 tail = head;
-                tokens.push(Token::Symbol(ch));
+                tokens.push(Token {
+                    data: TokenData::Symbol(ch),
+                    position: TokenPosition { line, column },
+                });
             }
 
             CaptureState::String => {
@@ -81,7 +101,10 @@ pub fn tokenize(data: &str) -> Vec<Token> {
                     }
                 }
 
-                tokens.push(Token::String(&data[tail..head - 1]));
+                tokens.push(Token {
+                    data: TokenData::String(&data[tail..head - 1]),
+                    position: TokenPosition { line, column },
+                });
                 tail = head;
             }
 
