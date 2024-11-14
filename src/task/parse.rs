@@ -20,6 +20,15 @@ pub enum Binding<'a> {
     To(&'a str),
 }
 
+impl Clone for Binding<'_> {
+    fn clone(&self) -> Self {
+        match self {
+            Binding::At(str) => Binding::At(str),
+            Binding::To(str) => Binding::To(str),
+        }
+    }
+}
+
 pub struct ParseError<'a> {
     pub message: &'a str,
     pub position: TokenPosition,
@@ -29,14 +38,25 @@ pub fn parse(data: Vec<Token>) -> Vec<Instruction> {
     let mut iterator = data.into_iter();
     let mut instructions: Vec<Instruction> = Vec::new();
     let mut errors: Vec<ParseError> = Vec::new();
-    let mut chain: Vec<Binding> = Vec::new();
 
-    parse_scope(&mut iterator, &mut chain, &mut errors);
+    while let Some(token) = iterator.next() {
+        begin_chain(&mut iterator, &mut errors, &mut Vec::new(), token)
+    }
 
     return instructions;
 }
+fn parse_scope(iterator: &mut IntoIter<Token>, chain: &mut Vec<Binding>, errors: &mut Vec<ParseError>) {
+    while let Some(token) = iterator.next() {
+        match &token.data {
+            TokenData::Symbol(ch) if *ch == '}' => break,
 
-fn parse_base(iterator: &mut IntoIter<Token>, chain: &mut Vec<Binding>, errors: &mut Vec<ParseError>, token: Token) {
+            //find a way to clone chain
+            _ => begin_chain(iterator, errors, &mut chain.clone(), token),
+        }
+    }
+}
+
+fn begin_chain(iterator: &mut IntoIter<Token>, errors: &mut Vec<ParseError>, chain: &mut Vec<Binding>, token: Token) {
     match &token.data {
         TokenData::Segment(str) => {
             match str {
@@ -50,35 +70,27 @@ fn parse_base(iterator: &mut IntoIter<Token>, chain: &mut Vec<Binding>, errors: 
     }
 }
 
-fn parse_scope(iterator: &mut IntoIter<Token>, chain: &mut Vec<Binding>, errors: &mut Vec<ParseError>) {
-    while let Some(token) = iterator.next() {
-        match &token.data {
-            TokenData::Symbol(ch) if *ch == '}' => break,
-            _ => parse_base(iterator, chain, errors, token),
-        }
-    }
-}
 
-fn parse_at(iterator: &mut IntoIter<Token>, chain: &mut Vec<Binding>, errors: &mut Vec<ParseError>, this: Token) {
+fn parse_at<'a>(iterator: &mut IntoIter<Token<'a>>, chain: &mut Vec<Binding<'a>>, errors: &mut Vec<ParseError>, this: Token) {
     let target_arg = iterator.next();
 
     if let Some(target_token) = target_arg {
-        let Token { data, position } = target_token;
-
-        match data {
+        match target_token.data {
             TokenData::Symbol(ch) => {
-                // parse_scope(iterator, chain, errors);
+                if (ch == '{') {
+                    parse_scope(iterator, chain, errors);
+                } else {
+                    errors.push(ParseError { message: "Unexpected symbol, expected binding or '{'", position: target_token.position });
+                }
             }
 
             TokenData::String(str) => {
                 chain.push(Binding::At(str));
             }
 
-            _ => errors.push(ParseError { message: "Expected string or symbol", position }),
+            _ => errors.push(ParseError { message: "Expected string or symbol", position: target_token.position }),
         }
-
-        return;
+    } else {
+        errors.push(ParseError { message: "Expected argument", position: this.position });
     }
-
-    errors.push(ParseError { message: "Expected argument", position: this.position });
 }

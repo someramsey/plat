@@ -1,6 +1,3 @@
-use std::fs;
-use std::path::PathBuf;
-
 pub enum TokenData<'a> {
     Symbol(char),
     String(&'a str),
@@ -16,7 +13,6 @@ pub struct Token<'a> {
     pub data: TokenData<'a>,
     pub position: TokenPosition,
 }
-
 
 enum CaptureState { Symbol, Newline, WhiteSpace, String, None }
 
