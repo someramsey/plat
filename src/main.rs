@@ -7,7 +7,7 @@ use clap::{Arg, Command};
 use std::collections::HashMap;
 use std::env;
 use std::fs::{File, OpenOptions};
-use std::io::{BufRead, BufReader, Seek, Write};
+use std::io::{BufRead, BufReader, Read, Seek, Write};
 use std::path::PathBuf;
 use indicatif::ProgressBar;
 use crate::task::runner::run_task;
@@ -78,6 +78,15 @@ fn load(origin: PathBuf, target: PathBuf, progress_bar: ProgressBar) {
 }
 
 fn main() {
+    let file =File::open("./src/test.plat").unwrap();
+    let mut reader = BufReader::new(&file);
+
+    let mut data = String::new();
+    reader.read_to_string(&mut data).unwrap();
+
+    run_task(data.as_str());
+
+    return;
     let app = Command::new("plat")
         .version("1.0")
         .subcommand(

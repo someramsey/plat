@@ -5,12 +5,13 @@ pub fn run_task(data: &str) {
     let tokens = tokenize(data);
     let instructions = parse(tokens);
 
-    for command in instructions {
-        match command {
-            Instruction::Copy(arg) =>
-                println!("saying: {}", arg),
-        }
-    }
+
+    // for command in instructions {
+    //     match command {
+    //         Instruction::Copy(arg) =>
+    //             println!("saying: {}", arg),
+    //     }
+    // }
     
     println!("Task complete");
     

@@ -1,3 +1,5 @@
+at "a" to "b" copy;
+
 copy at "./a/*.txt"
 
 to "folder" {
