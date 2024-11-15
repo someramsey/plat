@@ -14,6 +14,16 @@ pub struct Token<'a> {
     pub position: TokenPosition,
 }
 
+impl Token<'_> {
+    pub fn stringify(&self) -> &str {
+        match self {
+            TokenData::Segment(str) => str,
+            TokenData::String(str) => &format!("\"{}\"", str),
+            TokenData::Symbol(ch) => &format!("symbol '{}'", ch),
+        }
+    }
+}
+
 enum CaptureState { Symbol, Newline, WhiteSpace, String, None }
 
 fn capture(ch: char) -> CaptureState {

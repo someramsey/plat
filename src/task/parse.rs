@@ -1,5 +1,7 @@
+use std::fmt::format;
 use std::ops::Add;
 use std::path::Path;
+use std::ptr::write;
 use crate::task::tokenize::{Token, TokenData, TokenPosition};
 use std::slice::Iter;
 use std::vec::IntoIter;
@@ -15,24 +17,32 @@ pub enum Instruction {
         target: String,
     },
 }
-pub enum Binding<'a> {
-    At(&'a str),
-    To(&'a str),
-    Copy()
+
+pub struct ParseError {
+    pub message: String,
+    pub position: TokenPosition,
 }
 
-impl Clone for Binding<'_> {
+pub enum Modifier<'a> {
+    At(&'a str),
+    To(&'a str),
+}
+impl Clone for Modifier<'_> {
     fn clone(&self) -> Self {
         match self {
-            Binding::At(str) => Binding::At(str),
-            Binding::To(str) => Binding::To(str),
+            Modifier::At(str) => Modifier::At(str),
+            Modifier::To(str) => Modifier::To(str),
         }
     }
 }
 
-pub struct ParseError<'a> {
-    pub message: &'a str,
-    pub position: TokenPosition,
+impl Modifier<'_> {
+    pub fn stringify(&self) -> &str {
+        match self {
+            Modifier::At(str) => "at",
+            Modifier::To(str) => "to",
+        }
+    }
 }
 
 pub fn parse(data: Vec<Token>) -> Vec<Instruction> {
@@ -41,100 +51,96 @@ pub fn parse(data: Vec<Token>) -> Vec<Instruction> {
     let mut errors: Vec<ParseError> = Vec::new();
 
     while let Some(token) = iterator.next() {
-        conduct_chain(&mut iterator, &mut Vec::new(), &mut errors, token)
+        begin_command(token, &mut iterator, &mut Vec::new(), &mut errors);
     }
 
     return instructions;
 }
 
-fn parse_scope<'a>(iterator: &mut IntoIter<Token<'a>>, chain: &mut Vec<Binding<'a>>, errors: &mut Vec<ParseError>) {
-    while let Some(token) = iterator.next() {
-        match &token.data {
-            TokenData::Symbol(ch) if *ch == '}' => break,
-            _ => conduct_chain(iterator, &mut chain.clone(), errors, token),
-        }
-    }
-}
-
-fn conduct_chain<'a>(iterator: &mut IntoIter<Token<'a>>, chain: &mut Vec<Binding<'a>>, errors: &mut Vec<ParseError>, token: Token) {
+fn begin_command(token: Token, iterator: &mut IntoIter<Token>, modifiers: &mut Vec<Modifier>, errors: &mut Vec<ParseError>) {
     match token.data {
         TokenData::Segment(str) => {
             match str {
-                "at" => parse_at(iterator, chain, errors, token),
-                "to" => parse_to(iterator, chain, errors, token),
-                "copy" => parse_copy(iterator, chain, errors, token),
-
-                _ => errors.push(ParseError { message: "Unknown segment", position: token.position })
+                "at" => at_modifier(token, iterator, modifiers, errors),
+                "copy" => copy_command(token, iterator, modifiers, errors),
+                _ => errors.push(ParseError { message: format!("Invalid token, '{str}' is not recognized as a valid modifier or command"), position: token.position })
             }
         }
-        _ => errors.push(ParseError { message: "Unexpected token", position: token.position })
+        _ => errors.push(ParseError { message: String::from("Unexpected token, expected a command or modifier"), position: token.position })
     }
 }
 
-/*
-TODO: only allow one way selections
-at "a" {
-    copy at "b" to "c";
-    //at "b" copy to "c"; //error
-}
- */
+fn at_modifier(token: Token, iterator: &mut IntoIter<Token>, modifiers: &mut Vec<Modifier>, errors: &mut Vec<ParseError>) {
+    match iterator.next() {
+        Some(token) => {
+            if let TokenData::Symbol(ch) = token.data {
+                if ch != '{' {
+                    errors.push(ParseError { message: format!("Unexpected token, expected '{{', found {}", ch), position: token.position });
+                }
 
-fn parse_copy<'a>(iterator: &mut IntoIter<Token<'a>>, chain: &mut Vec<Binding<'a>>, errors: &mut Vec<ParseError>, this: Token) {
-
-}
-
-fn parse_at<'a>(iterator: &mut IntoIter<Token<'a>>, chain: &mut Vec<Binding<'a>>, errors: &mut Vec<ParseError>, this: Token) {
-    let target_arg = iterator.next();
-
-    //TODO: solve err repetition
-    if let Some(target_token) = target_arg {
-        match target_token.data {
-            TokenData::Symbol(ch) if ch == '{' => parse_scope(iterator, chain, errors),
-
-            TokenData::String(str) => {
-                chain.push(Binding::At(str));
+                return;
             }
 
-            _ => errors.push(ParseError { message: "Expected an extended command or a scope", position: target_token.position })
+            errors.push(ParseError { message: format!("Unexpected token, expected '{{', found {}", token.stringify()), position: token.position });
         }
 
-        let next = iterator.next();
+        None => errors.push(ParseError { message: String::from("Unexpected end of input, expected '{'"), position: token.position })
+    }
 
-        if let Some(next_token) = next {
-            match next_token.data {
-                TokenData::Symbol(ch) if ch == ';' => return,
-                _ => conduct_chain(iterator, chain, errors, next_token)
-            }
+    while let Some(token) = iterator.next() {
+        match token.data {
+            TokenData::Symbol(ch) if ch == '}' => break,
+            _ => begin_command(token, iterator, &mut modifiers.clone(), errors)
         }
-    } else {
-        errors.push(ParseError { message: "Expected argument", position: this.position });
     }
 }
 
-fn parse_to<'a>(iterator: &mut IntoIter<Token<'a>>, chain: &mut Vec<Binding<'a>>, errors: &mut Vec<ParseError>, this: Token) {
-    let target_arg = iterator.next();
+fn copy_command(token: Token, iterator: &mut IntoIter<Token>, modifiers: &mut Vec<Modifier>, errors: &mut Vec<ParseError>) {
+    let mut origin: Vec<&str> = Vec::new();
+    let mut target: Vec<&str> = Vec::new();
 
-    //TODO: solve err repetition
-    if let Some(target_token) = target_arg {
-        match target_token.data {
-            TokenData::Symbol(ch) if ch == '{' => parse_scope(iterator, chain, errors),
+    for modifier in modifiers {
+        match modifier {
+            Modifier::At(str) => origin.push(str),
+            Modifier::To(str) => target.push(str),
+            _=> return errors.push(ParseError { message: format!("Invalid command, cannot use 'copy' under this modifier chain, '{}' is not a valid modifier, expected ''at' and 'to' modifiers", modifier.stringify()), position: token.position })
+        }
+    }
 
-            TokenData::String(str) => {
-                chain.push(Binding::To(str));
+    while let Some(token) = iterator.next() {
+        match token.data {
+            TokenData::Symbol(str) if str == ';' => break,
+            TokenData::Segment(str) => match str {
+                "at" => at_attribute(token, iterator, errors, &mut origin),
+                _ => return errors.push(ParseError { message: format!("Unexpected token, expected 'at' or 'to' attributes, found {str}"), position: token.position })
+            },
+            _ => return errors.push(ParseError { message: format!("Unexpected token, expected 'at' or 'to' attributes, found {}", token.stringify()), position: token.position })
+        }
+    }
+
+    if origin.is_empty() {
+        errors.push(ParseError { message: String::from("Missing 'at' attribute"), position: token.position });
+        return;
+    }
+
+    if target.is_empty() {
+        errors.push(ParseError { message: String::from("Missing 'to' attribute"), position: token.position });
+        return;
+    }
+
+    println!("Origin: {:?}", origin);
+}
+
+fn at_attribute(token: Token, iterator: &mut IntoIter<Token>, errors: &mut Vec<ParseError>, origin: &mut Vec<&str>) {
+    match iterator.next() {
+        Some(token) => {
+            if let TokenData::String(str) = iterator.next() {
+                origin.push(str);
+            } else {
+                errors.push(ParseError { message: format!("Unexpected token, expected string literal, found {}", token.stringify()), position: token.position });
             }
-
-            _ => errors.push(ParseError { message: "Expected an extended command or a scope", position: target_token.position })
         }
 
-        let next = iterator.next();
-
-        if let Some(next_token) = next {
-            match next_token.data {
-                TokenData::Symbol(ch) if ch == ';' => return,
-                _ => conduct_chain(iterator, chain, errors, next_token)
-            }
-        }
-    } else {
-        errors.push(ParseError { message: "Expected argument", position: this.position });
+        None => errors.push(ParseError { message: String::from("Unexpected end of input, expected string literal"), position: token.position })
     }
 }
