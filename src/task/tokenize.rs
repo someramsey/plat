@@ -1,7 +1,6 @@
-pub enum TokenData<'a> {
-    Symbol(char),
-    String(&'a str),
-    Segment(&'a str),
+pub struct Token<'a> {
+    pub data: TokenData<'a>,
+    pub position: TokenPosition,
 }
 
 pub struct TokenPosition {
@@ -9,17 +8,18 @@ pub struct TokenPosition {
     pub column: i32,
 }
 
-pub struct Token<'a> {
-    pub data: TokenData<'a>,
-    pub position: TokenPosition,
+pub enum TokenData<'a> {
+    Symbol(char),
+    String(&'a str),
+    Segment(&'a str),
 }
 
-impl Token<'_> {
-    pub fn stringify(&self) -> &str {
+impl TokenData<'_> {
+    pub fn stringify(&self) -> String {
         match self {
-            TokenData::Segment(str) => str,
-            TokenData::String(str) => &format!("\"{}\"", str),
-            TokenData::Symbol(ch) => &format!("symbol '{}'", ch),
+            TokenData::Segment(str) => str.to_string(),
+            TokenData::String(str) => format!("\"{}\"", str),
+            TokenData::Symbol(ch) => format!("symbol '{}'", ch),
         }
     }
 }
@@ -29,7 +29,7 @@ enum CaptureState { Symbol, Newline, WhiteSpace, String, None }
 fn capture(ch: char) -> CaptureState {
     match ch {
         '"' => CaptureState::String,
-        '{' | '}' => CaptureState::Symbol,
+        '{' | '}' | ';' => CaptureState::Symbol,
         '\n' => CaptureState::Newline,
         _ => {
             if ch.is_whitespace() {
