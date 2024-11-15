@@ -24,9 +24,34 @@ pub struct ParseError {
     pub message: String,
     pub position: TokenPosition,
 }
-impl ParseError {
-    pub fn new(message: String, token: Token) -> ParseError {
-        return ParseError { message, position: token.position };
+
+struct ParseContext<'a> {
+    iterator: &'a mut IntoIter<Token<'a>>,
+    errors: &'a mut Vec<ParseError>,
+    instructions: &'a mut Vec<Instruction>,
+    position: TokenPosition
+}
+
+impl ParseContext<'_> {
+    pub fn new<'a>(iterator: &'a mut IntoIter<Token<'a>>, position: &TokenPosition, instructions: &'a mut Vec<Instruction>, errors: &'a mut Vec<ParseError>) -> ParseContext<'a> {
+        return ParseContext { iterator, instructions, errors, position: position.clone() };
+    }
+
+    pub fn next(&mut self) -> Option<Token> {
+        if let Some(token) = self.iterator.next() {
+            self.position = token.position.clone();
+            return Some(token);
+        }
+
+        return None;
+    }
+
+    pub fn error(&mut self, message: String) {
+        self.errors.push(ParseError { message, position: self.position.clone() });
+    }
+
+    pub fn instruction(&mut self, instruction: Instruction) {
+        self.instructions.push(instruction);
     }
 }
 
@@ -52,15 +77,14 @@ impl Modifier<'_> {
     }
 }
 
-//TODO: use Result in some functions instead of directly appending to error collection
-
 pub fn parse(data: Vec<Token>) -> Vec<Instruction> {
     let mut iterator = data.into_iter();
     let mut instructions: Vec<Instruction> = Vec::new();
     let mut errors: Vec<ParseError> = Vec::new();
 
     while let Some(token) = iterator.next() {
-        begin_command(token, &mut iterator, &mut instructions, &mut Vec::new(), &mut errors);
+        let mut context = ParseContext::new(&mut iterator, &token.position, &mut instructions, &mut errors);
+        begin_command(token, &mut context, &mut Vec::new());
     }
 
     println!("{:?}", &instructions);
@@ -68,68 +92,43 @@ pub fn parse(data: Vec<Token>) -> Vec<Instruction> {
     return instructions;
 }
 
-fn begin_command<'a>(token: Token, iterator: &mut IntoIter<Token<'a>>, instruction: &mut Vec<Instruction>, modifiers: &mut Vec<Modifier<'a>>, errors: &mut Vec<ParseError>) {
+fn begin_command<'a>(token: Token, context: &mut ParseContext<'a>, modifiers: &mut Vec<Modifier<'a>>) {
     match token.data {
-        TokenData::Segment(str) => {
-            match str {
-                "at" => at_modifier(token, iterator, instruction, modifiers, errors),
-                "copy" => copy_command(token, iterator, instruction, modifiers, errors),
-                _ => errors.push(ParseError::new(format!("Invalid token, '{str}' is not recognized as a valid modifier or command"), token))
-            }
+        TokenData::Segment(str) => match str {
+            "at" => at_modifier(context, modifiers),
+            "copy" => copy_command(context, modifiers),
+            _ => context.error(format!("Invalid token, '{str}' is not recognized as a valid modifier or command"))
         }
-        _ => errors.push(ParseError::new(String::from("Unexpected token, expected a command or modifier"), token))
+
+        _ => context.error(String::from("Unexpected token, expected a command or modifier"))
     }
 }
 
-fn at_modifier<'a>(token: Token, iterator: &mut IntoIter<Token<'a>>, instructions: &mut Vec<Instruction>, modifiers: &mut Vec<Modifier<'a>>, errors: &mut Vec<ParseError>) {
-    match iterator.next() {
+fn at_modifier<'a>(context: &mut ParseContext<'a>, modifiers: &mut Vec<Modifier<'a>>) {
+    match context.next() {
         Some(token) => {
             match token.data {
                 TokenData::String(str) => modifiers.push(Modifier::At(str)),
-                _ => {
-                    errors.push(ParseError::new(format!("Unexpected token, expected string literal, found {}", token.data.stringify()), token));
-                    return;
-                }
+                _ => return context.error(format!("Unexpected token, expected string literal, found {}", token.data.stringify()))
             }
         }
 
-        None => {
-            errors.push(ParseError::new(String::from("Unexpected end of input, expected string literal"), token));
-            return;
-        }
+        None => return context.error(String::from("Unexpected end of input, expected string literal"))
     }
 
-    match iterator.next() {
-        Some(token) => {
-            match token.data {
-                TokenData::Symbol(ch) => {
-                    if ch != '{' {
-                        errors.push(ParseError::new(format!("Unexpected token, expected '{{', found {}", ch), token));
-                        return;
-                    }
-                }
-                _ => {
-                    errors.push(ParseError::new(format!("Unexpected token, expected '{{', found {}", token.data.stringify()), token));
-                    return;
-                }
-            }
-        }
-
-        None => {
-            errors.push(ParseError::new(String::from("Unexpected end of input, expected '{'"), token));
-            return;
-        }
+    if let Err(err) = expect_symbol(context, '{') {
+        return context.error(err);
     }
 
-    while let Some(token) = iterator.next() {
+    while let Some(token) = context.next() {
         match token.data {
             TokenData::Symbol(ch) if ch == '}' => break,
-            _ => begin_command(token, iterator, instructions, &mut modifiers.clone(), errors)
+            _ => begin_command(token, context, modifiers),
         }
     }
 }
 
-fn copy_command<'a>(token: Token, iterator: &mut IntoIter<Token<'a>>, instructions: &mut Vec<Instruction>, modifiers: &mut Vec<Modifier<'a>>, errors: &mut Vec<ParseError>) {
+fn copy_command<'a>(context: &mut ParseContext<'a>, modifiers: &mut Vec<Modifier<'a>>) {
     let mut origin: Vec<&str> = Vec::new();
     let mut target: Vec<&str> = Vec::new();
 
@@ -137,70 +136,54 @@ fn copy_command<'a>(token: Token, iterator: &mut IntoIter<Token<'a>>, instructio
         match modifier {
             Modifier::At(str) => origin.push(str),
             Modifier::To(str) => target.push(str),
-            _ => return errors.push(ParseError::new(format!("Invalid command, cannot use 'copy' under this modifier chain, '{}' is not a valid modifier, expected ''at' and 'to' modifiers", modifier.stringify()), token))
+            _ => return context.error(format!("Invalid command, cannot use 'copy' under this modifier chain, '{}' is not a valid modifier, expected ''at' and 'to' modifiers", modifier.stringify()))
         }
     }
 
-    fn collect_attribute<'a>(current: Token, iterator: &mut IntoIter<Token<'a>>, errors: &mut Vec<ParseError>, collector: &mut Vec<&'a str>) {
-        match parse_string_literal(iterator, errors) {
-            Ok(str) => collector.push(str),
-            Err(err) => errors.push(ParseError::new(err, current))
-        }
-    }
-
-    while let Some(token) = iterator.next() {
+    while let Some(token) = context.next() {
         match token.data {
             TokenData::Symbol(str) if str == ';' => break,
             TokenData::Segment(str) => match str {
-                "at" => collect_attribute(token, iterator, errors, &mut origin),
-                "to" => collect_attribute(token, iterator, errors, &mut target),
-                _ => return errors.push(ParseError::new(format!("Unexpected token, expected 'at' or 'to' attributes, found {str}"), token))
+                "at" => match expect_string(context) {
+                    Ok(str) => origin.push(str),
+                    Err(err) => return context.error(err)
+                },
+
+                "to" => match expect_string(context) {
+                    Ok(str) => target.push(str),
+                    Err(err) => return context.error(err)
+                },
+
+                _ => return context.error(format!("Unexpected token, expected 'at' or 'to' attributes, found {str}"))
             },
-            _ => return errors.push(ParseError::new(format!("Unexpected token, expected 'at' or 'to' attributes, found {}", token.data.stringify()), token))
+            _ => return context.error(format!("Unexpected token, expected 'at' or 'to' attributes, found {}", token.data.stringify()))
         }
     }
 
     if origin.is_empty() {
-        errors.push(ParseError::new(String::from("Missing 'at' attribute"), token));
+        context.error(String::from("Missing 'at' attribute"));
         return;
     }
 
     if target.is_empty() {
-        errors.push(ParseError::new(String::from("Missing 'to' attribute"), token));
+        context.error(String::from("Missing 'to' attribute"));
         return;
     }
 
     let parsed_origin = match build_path(origin) {
         Ok(paths) => paths,
-        Err(err) => {
-            errors.push(ParseError::new(err, token));
-            return;
-        }
+        Err(err) => return context.error(err)
     };
 
     let parsed_target = match build_path(target) {
         Ok(paths) => paths,
-        Err(err) => {
-            errors.push(ParseError::new(err, token));
-            return;
-        }
+        Err(err) => return context.error(err)
     };
 
-    instructions.push(Instruction::Copy {
+    context.instruction(Instruction::Copy {
         origin: parsed_origin,
         target: parsed_target,
     });
-}
-
-fn parse_string_literal<'a>(iterator: &mut IntoIter<Token<'a>>, errors: &mut Vec<ParseError>) -> Result<&'a str, String> {
-    return match iterator.next() {
-        Some(token) => match token.data {
-            TokenData::String(str) => Ok(str),
-            _ => Err(format!("Unexpected token, expected string literal, found {}", token.data.stringify()))
-        }
-
-        None => Err(String::from("Unexpected end of input, expected string literal"))
-    };
 }
 
 fn build_path(paths: Vec<&str>) -> Result<Vec<PathBuf>, String> {
@@ -220,4 +203,34 @@ fn build_path(paths: Vec<&str>) -> Result<Vec<PathBuf>, String> {
     }
 
     Ok(result)
+}
+
+fn expect_symbol(context: &mut ParseContext, symbol: char) -> Result<char, String> {
+    return match context.next() {
+        Some(token) => match token.data {
+            TokenData::Symbol(ch) => {
+                if ch != symbol {
+                    return Err(format!("Unexpected token, expected '{symbol}', found {ch}"));
+                }
+
+                return Ok(ch);
+            }
+
+            _ => Err(format!("Unexpected token, expected '{symbol}', found {}", token.data.stringify()))
+        },
+
+        None => Err(format!("Unexpected end of input, expected '{symbol}'"))
+    };
+}
+
+fn expect_string<'a>(context: &mut ParseContext<'a>) -> Result<&'a str, String> {
+    return match context.next() {
+        Some(token) => match token.data {
+            TokenData::String(str) => Ok(str),
+
+            _ => Err(format!("Unexpected token, expected string literal, found {}", token.data.stringify()))
+        }
+
+        None => Err(String::from("Unexpected end of input, expected string literal"))
+    };
 }

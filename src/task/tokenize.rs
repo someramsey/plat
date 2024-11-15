@@ -8,6 +8,12 @@ pub struct TokenPosition {
     pub column: i32,
 }
 
+impl Clone for TokenPosition {
+    fn clone(&self) -> Self {
+        return TokenPosition { line: self.line, column: self.column };
+    }
+}
+
 pub enum TokenData<'a> {
     Symbol(char),
     String(&'a str),
