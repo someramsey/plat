@@ -12,6 +12,7 @@ use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Seek, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
+use glob::glob;
 
 fn open_data_file() -> File {
     let path = env::current_exe()
@@ -79,21 +80,18 @@ fn load(origin: PathBuf, target: PathBuf, progress_bar: ProgressBar) {
 }
 
 fn main() {
-    let dw: Arc<str> = Arc::from("dw");
-    println!("{}", dw.as_ref() == "dw");
 
+    let file =File::open("./src/test.plat").unwrap();
+    let mut reader = BufReader::new(&file);
+
+    let mut data = String::new();
+    reader.read_to_string(&mut data).unwrap();
+
+    run_task(data.as_str());
 
     return;
 
-    // let file =File::open("./src/test.plat").unwrap();
-    // let mut reader = BufReader::new(&file);
-    //
-    // let mut data = String::new();
-    // reader.read_to_string(&mut data).unwrap();
-    //
-    // run_task(data.as_str());
-    //
-    // return;
+
     let app = Command::new("plat")
         .version("1.0")
         .subcommand(

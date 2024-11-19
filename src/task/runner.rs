@@ -12,8 +12,9 @@ pub fn run_task(data: &str) {
     //             println!("saying: {}", arg),
     //     }
     // }
-    
-    println!("Task complete");
+
+
+    println!("{:?}", instructions);
     
     
 }

@@ -23,6 +23,7 @@ pub enum Instruction {
     },
 }
 
+#[derive(Debug)]
 pub struct ParseError {
     pub message: Arc<str>,
     pub position: TokenPosition,
@@ -66,6 +67,7 @@ impl ParseContext {
     pub fn next(&mut self) -> Option<Token> {
         match self.iterator.next() {
             Some(token) => {
+                println!("{:?}", token);
                 self.pos = token.position.clone();
                 Some(token)
             }
@@ -142,7 +144,9 @@ pub fn parse(data: Vec<Token>) -> Result<Vec<Instruction>, Vec<ParseError>> {
     let mut context = ParseContext::new(iterator);
 
     while !context.done {
-        parse_command(&mut context);
+        if let Some(Token { data: TokenData::Segment(str), position }) = context.next() {
+            begin_chain(&mut context, Vec::new(), str.as_ref(), position);
+        }
     }
 
     if context.failed {
@@ -161,15 +165,7 @@ fn begin_chain(context: &mut ParseContext, chain: Vec<Modifier>, str: &str, posi
     }
 }
 
-fn parse_command(context: &mut ParseContext) {
-    if let Some(Token { data: TokenData::String(str), position }) = context.next() {
-        begin_chain(context, Vec::new(), str.as_ref(), position);
-    } else {
-        context.err(Arc::from("Expected command"));
-    }
-}
-
-fn parse_scope(context: &mut ParseContext, chain: Vec<Modifier>) {
+fn begin_scope(context: &mut ParseContext, chain: Vec<Modifier>) {
     if !context.expect_symbol('{') {
         return;
     }
@@ -178,7 +174,7 @@ fn parse_scope(context: &mut ParseContext, chain: Vec<Modifier>) {
         if let Some(Token { data, position }) = context.next() {
             match data {
                 TokenData::Symbol('}') => break,
-                TokenData::String(str) => begin_chain(context, chain.clone(), str.as_ref(), position),
+                TokenData::Segment(str) => begin_chain(context, chain.clone(), str.as_ref(), position),
                 _ => context.err_at(Arc::from("Expected command or '}'"), position),
             }
         } else {
@@ -192,7 +188,7 @@ fn at_modifier(context: &mut ParseContext, mut chain: Vec<Modifier>) {
         chain.push(Modifier::At(str));
     }
 
-    parse_scope(context, chain);
+    begin_scope(context, chain);
 }
 
 fn to_modifier(context: &mut ParseContext, mut chain: Vec<Modifier>) {
@@ -200,7 +196,7 @@ fn to_modifier(context: &mut ParseContext, mut chain: Vec<Modifier>) {
         chain.push(Modifier::To(str));
     }
 
-    parse_scope(context, chain);
+    begin_scope(context, chain);
 }
 
 fn copy_command(context: &mut ParseContext, chain: Vec<Modifier>) {
@@ -260,7 +256,6 @@ fn copy_command(context: &mut ParseContext, chain: Vec<Modifier>) {
     context.instructions.push(Instruction::Copy { origin: parsed_origin, target: parsed_target });
 }
 
-
 fn build_path(paths: Vec<Arc<str>>) -> Result<Vec<PathBuf>, Arc<str>> {
     let joined = paths.iter()
         .map(|s| s.trim_matches('/'))
@@ -270,6 +265,7 @@ fn build_path(paths: Vec<Arc<str>>) -> Result<Vec<PathBuf>, Arc<str>> {
 
     let mut result = Vec::new();
 
+    //TODO: Glob gives results relative to cwd unless it has an absolute path
     for entry in glob(&joined).map_err(|e| e.to_string())? {
         match entry {
             Ok(path) => result.push(path),

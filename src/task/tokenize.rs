@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+#[derive(Debug)]
 pub struct TokenPosition {
     pub line: i32,
     pub column: i32,
@@ -11,6 +12,7 @@ impl Clone for TokenPosition {
     }
 }
 
+#[derive(Debug)]
 pub enum TokenData {
     Symbol(char),
     String(Arc<str>),
@@ -27,6 +29,7 @@ impl TokenData {
     }
 }
 
+#[derive(Debug)]
 pub struct Token {
     pub data: TokenData,
     pub position: TokenPosition,
@@ -67,14 +70,26 @@ pub fn tokenize(data: &str) -> Vec<Token> {
 
         let state = capture(ch);
 
-        if (head == len && head - tail > 0) || (!matches!(state, CaptureState::None) && head - tail > 1) {
-            let segment = &data[tail..head];
-            tail = head;
+        if head == len {
+            //TODO: reimplement without breaking other shit
+            // if head - tail > 0 {
+            //     let slice = &data[tail..head];
+            //     tail = head;
+            //
+            //     tokens.push(Token {
+            //         data: TokenData::Segment(Arc::from(slice)),
+            //         position: TokenPosition { line, column },
+            //     });
+            // }
+        } else if !matches!(state, CaptureState::None) {
+            if head - tail > 1 {
+                let slice = &data[tail..head - 1];
 
-            tokens.push(Token {
-                data: TokenData::Segment(Arc::from(segment)),
-                position: TokenPosition { line, column },
-            });
+                tokens.push(Token {
+                    data: TokenData::Segment(Arc::from(slice)),
+                    position: TokenPosition { line, column },
+                });
+            }
 
             tail = head;
         }

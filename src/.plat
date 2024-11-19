@@ -1,7 +1,3 @@
-at "a" to "b" copy;
-
-copy at "./a/*.txt"
-
 to "folder" {
     copy at "./a" to "./b";
     copy at "./a" to "./b";
