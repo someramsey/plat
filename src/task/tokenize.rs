@@ -21,7 +21,7 @@ pub enum TokenData<'a> {
 }
 
 impl TokenData<'_> {
-    pub fn stringify(&self) -> String {
+    pub fn kind(&self) -> String {
         match self {
             TokenData::Segment(str) => str.to_string(),
             TokenData::String(str) => format!("\"{}\"", str),

@@ -3,14 +3,14 @@
 
 mod task;
 
+use crate::task::runner::run_task;
 use clap::{Arg, Command};
+use indicatif::ProgressBar;
 use std::collections::HashMap;
 use std::env;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Seek, Write};
 use std::path::PathBuf;
-use indicatif::ProgressBar;
-use crate::task::runner::run_task;
 
 fn open_data_file() -> File {
     let path = env::current_exe()
