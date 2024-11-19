@@ -1,7 +1,4 @@
-pub struct Token<'a> {
-    pub data: TokenData<'a>,
-    pub position: TokenPosition,
-}
+use std::sync::Arc;
 
 pub struct TokenPosition {
     pub line: i32,
@@ -14,13 +11,13 @@ impl Clone for TokenPosition {
     }
 }
 
-pub enum TokenData<'a> {
+pub enum TokenData {
     Symbol(char),
-    String(&'a str),
-    Segment(&'a str),
+    String(Arc<str>),
+    Segment(Arc<str>),
 }
 
-impl TokenData<'_> {
+impl TokenData {
     pub fn kind(&self) -> String {
         match self {
             TokenData::Segment(str) => str.to_string(),
@@ -28,6 +25,11 @@ impl TokenData<'_> {
             TokenData::Symbol(ch) => format!("symbol '{}'", ch),
         }
     }
+}
+
+pub struct Token {
+    pub data: TokenData,
+    pub position: TokenPosition,
 }
 
 enum CaptureState { Symbol, Newline, WhiteSpace, String, None }
@@ -65,26 +67,14 @@ pub fn tokenize(data: &str) -> Vec<Token> {
 
         let state = capture(ch);
 
-        if head == len {
-            if head - tail > 0 {
-                let word = &data[tail..head];
-                tail = head;
+        if (head == len && head - tail > 0) || (!matches!(state, CaptureState::None) && head - tail > 1) {
+            let segment = &data[tail..head];
+            tail = head;
 
-                tokens.push(Token {
-                    data: TokenData::Segment(word),
-                    position: TokenPosition { line, column },
-                });
-            }
-        } else if !matches!(state, CaptureState::None) {
-            if head - tail > 1 {
-                let word = &data[tail..head - 1];
-                tail = head;
-
-                tokens.push(Token {
-                    data: TokenData::Segment(word),
-                    position: TokenPosition { line, column },
-                });
-            }
+            tokens.push(Token {
+                data: TokenData::Segment(Arc::from(segment)),
+                position: TokenPosition { line, column },
+            });
 
             tail = head;
         }
@@ -113,8 +103,10 @@ pub fn tokenize(data: &str) -> Vec<Token> {
                     }
                 }
 
+                let slice = &data[tail..head - 1];
+
                 tokens.push(Token {
-                    data: TokenData::String(&data[tail..head - 1]),
+                    data: TokenData::String(Arc::from(slice)),
                     position: TokenPosition { line, column },
                 });
                 tail = head;
