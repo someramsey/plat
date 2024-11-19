@@ -76,9 +76,13 @@ impl ParseContext {
         }
     }
 
-    pub fn err(&mut self, message: Arc<str>, position: TokenPosition) {
+    pub fn err_at(&mut self, message: Arc<str>, position: TokenPosition) {
         self.errors.push(ParseError { message, position });
         self.failed = true;
+    }
+
+    pub fn err(&mut self, message: Arc<str>) {
+        self.err_at(message, self.pos.clone());
     }
 
     pub fn expect_symbol(&mut self, symbol: char) -> bool {
@@ -88,11 +92,11 @@ impl ParseContext {
 
                 _ => {
                     let kind = data.kind();
-                    self.err(Arc::from(format!("Expected '{symbol}', found {kind}")), position)
+                    self.err_at(Arc::from(format!("Expected '{symbol}', found {kind}")), position)
                 }
             }
         } else {
-            self.err(Arc::from(format!("Expected '{symbol}'")), self.pos.clone());
+            self.err(Arc::from(format!("Expected '{symbol}'")));
         }
 
         return false;
@@ -105,11 +109,11 @@ impl ParseContext {
 
                 _ => {
                     let kind = data.kind();
-                    self.err(Arc::from(format!("Expected '{segment}', found {kind}")), position)
+                    self.err_at(Arc::from(format!("Expected '{segment}', found {kind}")), position)
                 }
             }
         } else {
-            self.err(Arc::from(format!("Expected '{segment}'")), self.pos.clone());
+            self.err(Arc::from(format!("Expected '{segment}'")));
         }
 
         return false;
@@ -122,11 +126,11 @@ impl ParseContext {
 
                 _ => {
                     let kind = data.kind();
-                    self.err(Arc::from(format!("Expected string, found {kind}")), position);
+                    self.err_at(Arc::from(format!("Expected string, found {kind}")), position);
                 }
             }
         } else {
-            self.err(Arc::from("Expected string literal"), self.pos.clone());
+            self.err(Arc::from("Expected string literal"));
         }
 
         return None;
@@ -153,7 +157,7 @@ fn begin_chain(context: &mut ParseContext, chain: Vec<Modifier>, str: &str, posi
         "at" => at_modifier(context, chain),
         "to" => to_modifier(context, chain),
         "copy" => copy_command(context, chain),
-        _ => context.err(Arc::from(format!("Unknown command '{str}'")), position),
+        _ => context.err_at(Arc::from(format!("Unknown command '{str}'")), position),
     }
 }
 
@@ -161,7 +165,7 @@ fn parse_command(context: &mut ParseContext) {
     if let Some(Token { data: TokenData::String(str), position }) = context.next() {
         begin_chain(context, Vec::new(), str.as_ref(), position);
     } else {
-        context.err(Arc::from("Expected command"), context.pos.clone());
+        context.err(Arc::from("Expected command"));
     }
 }
 
@@ -175,10 +179,10 @@ fn parse_scope(context: &mut ParseContext, chain: Vec<Modifier>) {
             match data {
                 TokenData::Symbol('}') => break,
                 TokenData::String(str) => begin_chain(context, chain.clone(), str.as_ref(), position),
-                _ => context.err(Arc::from("Expected command or '}'"), position),
+                _ => context.err_at(Arc::from("Expected command or '}'"), position),
             }
         } else {
-            context.err(Arc::from("Unclosed scope"), context.pos.clone());
+            context.err(Arc::from("Unclosed scope"));
         }
     }
 }
@@ -208,7 +212,7 @@ fn copy_command(context: &mut ParseContext, chain: Vec<Modifier>) {
             Modifier::At(str) => origin.push(str),
             Modifier::To(str) => target.push(str),
 
-            _ => context.err(Arc::from("Invalid modifier for 'copy', expected 'at' or 'to'"), context.pos.clone()),
+            _ => context.err(Arc::from("Invalid modifier for 'copy', expected 'at' or 'to'")),
         }
     }
 
@@ -228,22 +232,52 @@ fn copy_command(context: &mut ParseContext, chain: Vec<Modifier>) {
                         }
                     }
 
-                    _ => context.err(Arc::from(format!("Unknown command '{str}'")), position),
+                    _ => context.err_at(Arc::from(format!("Unknown command '{str}'")), position),
                 }
             }
-            _ => context.err(Arc::from("Expected command attribute"), position),
+            _ => context.err_at(Arc::from("Expected command attribute"), position),
         }
     }
 
     if origin.is_empty() {
-        context.err(Arc::from("Expected at least one origin path"), context.pos.clone());
+        context.err(Arc::from("Expected at least one origin path"));
     }
 
     if target.is_empty() {
-        context.err(Arc::from("Expected at least one target path"), context.pos.clone());
+        context.err(Arc::from("Expected at least one target path"));
     }
 
-    // context.instructions.push(Instruction::Copy { origin, target });
+    let parsed_origin = match build_path(origin) {
+        Ok(paths) => paths,
+        Err(err) => return context.err(err)
+    };
+
+    let parsed_target = match build_path(target) {
+        Ok(paths) => paths,
+        Err(err) => return context.err(err)
+    };
+
+    context.instructions.push(Instruction::Copy { origin: parsed_origin, target: parsed_target });
+}
+
+
+fn build_path(paths: Vec<Arc<str>>) -> Result<Vec<PathBuf>, Arc<str>> {
+    let joined = paths.iter()
+        .map(|s| s.trim_matches('/'))
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<&str>>()
+        .join("/");
+
+    let mut result = Vec::new();
+
+    for entry in glob(&joined).map_err(|e| e.to_string())? {
+        match entry {
+            Ok(path) => result.push(path),
+            Err(e) => return Err(Arc::from(e.to_string())),
+        }
+    }
+
+    Ok(result)
 }
 
 fn read_string(context: &mut ParseContext, vec: &mut Vec<Arc<str>>) -> bool {
