@@ -5,16 +5,17 @@ pub fn run_task(data: &str) {
     let tokens = tokenize(data);
     let instructions = parse(tokens);
 
+    if let Ok(commands) = instructions {
+        for command in commands {
+            match command {
+                Instruction::Copy { origin, target } => {
+                    println!("Copy {} to {}", origin, target);
+                }
+                _ => {}
+            }
+        }
+    }
 
-    // for command in instructions {
-    //     match command {
-    //         Instruction::Copy(arg) =>
-    //             println!("saying: {}", arg),
-    //     }
-    // }
 
-
-    println!("{:?}", instructions);
-    
-    
+    // println!("{:?}", instructions);
 }

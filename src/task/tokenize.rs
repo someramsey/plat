@@ -70,28 +70,30 @@ pub fn tokenize(data: &str) -> Vec<Token> {
 
         let state = capture(ch);
 
-        if head == len {
-            //TODO: reimplement without breaking other shit
-            // if head - tail > 0 {
-            //     let slice = &data[tail..head];
-            //     tail = head;
-            //
-            //     tokens.push(Token {
-            //         data: TokenData::Segment(Arc::from(slice)),
-            //         position: TokenPosition { line, column },
-            //     });
-            // }
-        } else if !matches!(state, CaptureState::None) {
-            if head - tail > 1 {
-                let slice = &data[tail..head - 1];
+        match state {
+            CaptureState::None => {
+                if head == len && head - tail > 0 {
+                    let slice = &data[tail..head];
+                    tail = head;
 
-                tokens.push(Token {
-                    data: TokenData::Segment(Arc::from(slice)),
-                    position: TokenPosition { line, column },
-                });
+                    tokens.push(Token {
+                        data: TokenData::Segment(Arc::from(slice)),
+                        position: TokenPosition { line, column },
+                    });
+                }
             }
+            _ => {
+                if head - tail > 1 {
+                    let slice = &data[tail..head - 1];
 
-            tail = head;
+                    tokens.push(Token {
+                        data: TokenData::Segment(Arc::from(slice)),
+                        position: TokenPosition { line, column },
+                    });
+                }
+
+                tail = head;
+            }
         }
 
         match state {

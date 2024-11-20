@@ -13,8 +13,8 @@ use glob::glob;
 #[derive(Debug)]
 pub enum Instruction {
     Copy {
-        origin: Vec<PathBuf>,
-        target: Vec<PathBuf>,
+        origin: Arc<str>,
+        target: Arc<str>,
     },
     Write {
         value: String,
@@ -67,7 +67,6 @@ impl ParseContext {
     pub fn next(&mut self) -> Option<Token> {
         match self.iterator.next() {
             Some(token) => {
-                println!("{:?}", token);
                 self.pos = token.position.clone();
                 Some(token)
             }
@@ -139,7 +138,7 @@ impl ParseContext {
     }
 }
 
-pub fn parse(data: Vec<Token>) -> Result<Vec<Instruction>, Vec<ParseError>> {
+pub fn parse<'a>(data: Vec<Token>) -> Result<Vec<Instruction>, Vec<ParseError>> {
     let mut iterator = data.into_iter();
     let mut context = ParseContext::new(iterator);
 
@@ -243,37 +242,18 @@ fn copy_command(context: &mut ParseContext, chain: Vec<Modifier>) {
         context.err(Arc::from("Expected at least one target path"));
     }
 
-    let parsed_origin = match build_path(origin) {
-        Ok(paths) => paths,
-        Err(err) => return context.err(err)
-    };
-
-    let parsed_target = match build_path(target) {
-        Ok(paths) => paths,
-        Err(err) => return context.err(err)
-    };
-
-    context.instructions.push(Instruction::Copy { origin: parsed_origin, target: parsed_target });
+    context.instructions.push(Instruction::Copy {
+        origin: build_path(origin),
+        target: build_path(target),
+    });
 }
 
-fn build_path(paths: Vec<Arc<str>>) -> Result<Vec<PathBuf>, Arc<str>> {
-    let joined = paths.iter()
+fn build_path(paths: Vec<Arc<str>>) -> Arc<str> {
+    Arc::from(paths.iter()
         .map(|s| s.trim_matches('/'))
         .filter(|s| !s.is_empty())
         .collect::<Vec<&str>>()
-        .join("/");
-
-    let mut result = Vec::new();
-
-    //TODO: Glob gives results relative to cwd unless it has an absolute path
-    for entry in glob(&joined).map_err(|e| e.to_string())? {
-        match entry {
-            Ok(path) => result.push(path),
-            Err(e) => return Err(Arc::from(e.to_string())),
-        }
-    }
-
-    Ok(result)
+        .join("/"))
 }
 
 fn read_string(context: &mut ParseContext, vec: &mut Vec<Arc<str>>) -> bool {
