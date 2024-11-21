@@ -1,16 +1,5 @@
 use std::sync::Arc;
-
-#[derive(Debug)]
-pub struct TokenPosition {
-    pub line: i32,
-    pub column: i32,
-}
-
-impl Clone for TokenPosition {
-    fn clone(&self) -> Self {
-        return TokenPosition { line: self.line, column: self.column };
-    }
-}
+use crate::task::position::Position;
 
 #[derive(Debug)]
 pub enum TokenData {
@@ -32,7 +21,7 @@ impl TokenData {
 #[derive(Debug)]
 pub struct Token {
     pub data: TokenData,
-    pub position: TokenPosition,
+    pub position: Position,
 }
 
 enum CaptureState { Symbol, Newline, WhiteSpace, String, None }
@@ -78,7 +67,7 @@ pub fn tokenize(data: &str) -> Vec<Token> {
 
                     tokens.push(Token {
                         data: TokenData::Segment(Arc::from(slice)),
-                        position: TokenPosition { line, column },
+                        position: Position { line, column },
                     });
                 }
             }
@@ -88,7 +77,7 @@ pub fn tokenize(data: &str) -> Vec<Token> {
 
                     tokens.push(Token {
                         data: TokenData::Segment(Arc::from(slice)),
-                        position: TokenPosition { line, column },
+                        position: Position { line, column },
                     });
                 }
 
@@ -106,7 +95,7 @@ pub fn tokenize(data: &str) -> Vec<Token> {
                 tail = head;
                 tokens.push(Token {
                     data: TokenData::Symbol(ch),
-                    position: TokenPosition { line, column },
+                    position: Position { line, column },
                 });
             }
 
@@ -124,7 +113,7 @@ pub fn tokenize(data: &str) -> Vec<Token> {
 
                 tokens.push(Token {
                     data: TokenData::String(Arc::from(slice)),
-                    position: TokenPosition { line, column },
+                    position: Position { line, column },
                 });
                 tail = head;
             }

@@ -3,7 +3,7 @@
 
 mod task;
 
-use crate::task::runner::run_task;
+use crate::task::evaluator::evaluate;
 use clap::{Arg, Command};
 use indicatif::ProgressBar;
 use std::collections::HashMap;
@@ -68,7 +68,7 @@ fn load(origin: PathBuf, target: PathBuf, progress_bar: ProgressBar) {
         let content = std::fs::read_to_string(&task_file_path)
             .expect("Read task file");
 
-        run_task(&content);
+        evaluate(&content);
         return;
     }
 
@@ -80,14 +80,13 @@ fn load(origin: PathBuf, target: PathBuf, progress_bar: ProgressBar) {
 }
 
 fn main() {
-
-    let file =File::open("./src/test.plat").unwrap();
+    let file =File::open(".plat").unwrap();
     let mut reader = BufReader::new(&file);
 
     let mut data = String::new();
     reader.read_to_string(&mut data).unwrap();
 
-    run_task(data.as_str());
+    evaluate(data.as_str());
 
     return;
 

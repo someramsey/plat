@@ -1,14 +1,8 @@
-use std::any::TypeId;
-use std::fmt::format;
-use std::io::Chain;
-use std::ops::Add;
-use std::path::{Path, PathBuf};
-use std::ptr::write;
-use crate::task::tokenize::{Token, TokenData, TokenPosition};
-use std::slice::Iter;
+use crate::task::tokenize::{Token, TokenData};
 use std::sync::Arc;
 use std::vec::IntoIter;
-use glob::glob;
+use crate::task::error::Error;
+use crate::task::position::Position;
 
 #[derive(Debug)]
 pub enum Instruction {
@@ -21,12 +15,6 @@ pub enum Instruction {
         pattern: String,
         target: String,
     },
-}
-
-#[derive(Debug)]
-pub struct ParseError {
-    pub message: Arc<str>,
-    pub position: TokenPosition,
 }
 
 enum Modifier {
@@ -46,10 +34,10 @@ impl Clone for Modifier {
 struct ParseContext {
     done: bool,
     failed: bool,
-    pos: TokenPosition,
+    pos: Position,
     iterator: IntoIter<Token>,
     instructions: Vec<Instruction>,
-    errors: Vec<ParseError>,
+    errors: Vec<Error>,
 }
 
 impl ParseContext {
@@ -58,7 +46,7 @@ impl ParseContext {
             iterator,
             done: false,
             failed: false,
-            pos: TokenPosition { line: 0, column: 0 },
+            pos: Position { line: 0, column: 0 },
             instructions: Vec::new(),
             errors: Vec::new(),
         }
@@ -77,8 +65,8 @@ impl ParseContext {
         }
     }
 
-    pub fn err_at(&mut self, message: Arc<str>, position: TokenPosition) {
-        self.errors.push(ParseError { message, position });
+    pub fn err_at(&mut self, message: Arc<str>, position: Position) {
+        self.errors.push(Error { message, position });
         self.failed = true;
     }
 
@@ -138,7 +126,7 @@ impl ParseContext {
     }
 }
 
-pub fn parse<'a>(data: Vec<Token>) -> Result<Vec<Instruction>, Vec<ParseError>> {
+pub fn parse<'a>(data: Vec<Token>) -> Result<Vec<Instruction>, Vec<Error>> {
     let mut iterator = data.into_iter();
     let mut context = ParseContext::new(iterator);
 
@@ -155,7 +143,7 @@ pub fn parse<'a>(data: Vec<Token>) -> Result<Vec<Instruction>, Vec<ParseError>> 
     }
 }
 
-fn begin_chain(context: &mut ParseContext, chain: Vec<Modifier>, str: &str, position: TokenPosition) {
+fn begin_chain(context: &mut ParseContext, chain: Vec<Modifier>, str: &str, position: Position) {
     match str {
         "at" => at_modifier(context, chain),
         "to" => to_modifier(context, chain),
