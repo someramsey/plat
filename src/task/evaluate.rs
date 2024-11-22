@@ -1,14 +1,15 @@
 use crate::task::error::Error;
-use crate::task::parsers::parse_script::{Instruction, Instruction};
+use crate::task::parsers::parse_script::Instruction;
 use crate::task::position::Position;
 use glob::glob;
-use std::fs;
+use std::{fs, net};
+use crate::task::parsers::context::Node;
 
-pub fn evaluate(instructions: Vec<Instruction>) -> Option<Vec<Error>> {
+pub fn evaluate(nodes: Vec<Node<Instruction>>) -> Option<Vec<Error>> {
     let mut errors: Vec<Error> = Vec::new();
 
-    for instruction in instructions {
-        let Instruction { data, position } = instruction;
+    for node in nodes {
+        let Node { data, position } = node;
 
         match data {
             Instruction::Copy { origin, target } => copy(&origin, &target, position, &mut errors),

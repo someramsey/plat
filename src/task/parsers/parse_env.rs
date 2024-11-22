@@ -59,7 +59,7 @@ fn once(context: &mut ParseContext<Field>) {
 
     let data = match context.next() {
         Some(next) => {
-            let TokenData { data, position } = next;
+            let Token { data, position } = next;
 
             match data {
                 TokenData::String(value) => FieldData::Input(Validator::Custom(value)),

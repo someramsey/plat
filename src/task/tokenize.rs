@@ -1,3 +1,4 @@
+use std::str::Chars;
 use std::sync::Arc;
 use crate::task::position::Position;
 
@@ -5,15 +6,17 @@ use crate::task::position::Position;
 pub enum TokenData {
     Symbol(char),
     String(Arc<str>),
+    Regex(Arc<str>),
     Segment(Arc<str>),
 }
 
 impl TokenData {
-    pub fn kind(&self) -> String {
+    pub fn kind(&self) -> Arc<str> {
         match self {
-            TokenData::Segment(str) => str.to_string(),
-            TokenData::String(str) => format!("\"{}\"", str),
-            TokenData::Symbol(ch) => format!("symbol '{}'", ch),
+            TokenData::Segment(str) => str.clone(),
+            TokenData::String(str) => Arc::from("string literal"),
+            TokenData::Regex(str) => Arc::from("regex"),
+            TokenData::Symbol(ch) => Arc::from(format!("symbol '{}'", ch)),
         }
     }
 }
@@ -41,13 +44,6 @@ fn capture(ch: char) -> CaptureState {
         }
     }
 }
-
-fn read_slice(data: &str, head: &mut usize, tail: &mut usize) -> Arc<str> {
-    let slice = &data[*tail..*head];
-    *tail = *head;
-    return Arc::from(slice);
-}
-
 
 pub fn tokenize(data: &str) -> Vec<Token> {
     let len = data.len();
@@ -108,49 +104,24 @@ pub fn tokenize(data: &str) -> Vec<Token> {
             }
 
             CaptureState::String => {
-                while let Some(ch) = chars.next() {
-                    head += 1;
-                    column += 1;
-
-                    if ch == '\n' {
-                        line += 1;
-                        column = 0;
-                    } else if ch == '\\' {
-                        head += 1;
-                        column += 1;
-                    } else if ch == '"' {
-                        break;
-                    }
-                }
-
-                let slice = &data[tail..head - 1];
+                let slice = read_slice('"', &data, &mut chars, &mut head, &mut tail, &mut column, &mut line);
 
                 tokens.push(Token {
-                    data: TokenData::String(Arc::from(slice)),
+                    data: TokenData::String(slice),
                     position: Position { line, column },
                 });
+
                 tail = head;
             }
 
             CaptureState::Regex => {
-                for ch in chars.by_ref() {
-                    head += 1;
-                    column += 1;
-
-                    if ch == '\\' {
-                        head += 1;
-                        column += 1;
-                    } else if ch == '/' {
-                        break;
-                    }
-                }
-
-                let slice = &data[tail..head - 1];
+                let slice = read_slice('/', &data, &mut chars, &mut head, &mut tail, &mut column, &mut line);
 
                 tokens.push(Token {
-                    data: TokenData::String(Arc::from(slice)),
+                    data: TokenData::Regex(slice),
                     position: Position { line, column },
                 });
+
                 tail = head;
             }
 
@@ -159,5 +130,24 @@ pub fn tokenize(data: &str) -> Vec<Token> {
     }
 
     return tokens;
+}
+
+fn read_slice(end: char, data: &str, chars: &mut Chars, head: &mut usize, tail: &mut usize, column: &mut i32, line: &mut i32) -> Arc<str> {
+    while let Some(ch) = chars.next() {
+        *head += 1;
+        *column += 1;
+
+        if ch == '\n' {
+            *line += 1;
+            *column = 0;
+        } else if ch == '\\' {
+            *head += 1;
+            *column += 1;
+        } else if ch == '"' {
+            break;
+        }
+    }
+
+    return Arc::from(&data[*tail..*head - 1usize]);
 }
 
