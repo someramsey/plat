@@ -1,0 +1,3 @@
+at "a" {
+    copy at "c*.txt" to "d";
+}

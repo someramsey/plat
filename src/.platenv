@@ -1,0 +1,8 @@
+username: Input | "What is your username?" > /^[a-zA-Z0-9_]{3,16}$/
+age: Input | "What is your age?" > Integer
+height: Input | "What is your height?" > Decimal
+color: Choice | "What is your favorite color?" > {
+    "Red",
+    "Green",
+    "Blue"
+}
