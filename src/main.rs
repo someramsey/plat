@@ -3,8 +3,10 @@
 
 mod task;
 
-use crate::task::evaluator::evaluate;
+use crate::task::evaluate::evaluate;
+use crate::task::tokenize::tokenize;
 use clap::{Arg, Command};
+use glob::glob;
 use indicatif::ProgressBar;
 use std::collections::HashMap;
 use std::env;
@@ -12,14 +14,13 @@ use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Seek, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
-use glob::glob;
 
 fn open_data_file() -> File {
     let path = env::current_exe()
         .expect("Get current executable path")
         .parent()
         .expect("Get parent directory of executable")
-        .join(".platdata");;
+        .join(".platdata");
 
     return OpenOptions::new()
         .create(true)
@@ -54,7 +55,9 @@ fn write_data_file(data: &HashMap<String, String>) {
     let mut data_file = open_data_file();
 
     data_file.set_len(0).expect("Truncate file");
-    data_file.seek(std::io::SeekFrom::Start(0)).expect("Seek to start of file");
+    data_file
+        .seek(std::io::SeekFrom::Start(0))
+        .expect("Seek to start of file");
 
     for (name, path) in data {
         writeln!(data_file, "{}|{}", name, path).expect("Write to file");
@@ -65,10 +68,8 @@ fn load(origin: PathBuf, target: PathBuf, progress_bar: ProgressBar) {
     let task_file_path = origin.join("task.plat");
 
     if task_file_path.exists() {
-        let content = std::fs::read_to_string(&task_file_path)
-            .expect("Read task file");
+        let content = std::fs::read_to_string(&task_file_path).expect("Read task file");
 
-        evaluate(&content);
         return;
     }
 
@@ -80,16 +81,17 @@ fn load(origin: PathBuf, target: PathBuf, progress_bar: ProgressBar) {
 }
 
 fn main() {
-    let file =File::open(".plat").unwrap();
+    let file = File::open(".platenv").unwrap();
     let mut reader = BufReader::new(&file);
 
     let mut data = String::new();
     reader.read_to_string(&mut data).unwrap();
 
-    evaluate(data.as_str());
+    let tokens = tokenize(&data);
+    // let instructions = parse_instructions(tokens);
+
 
     return;
-
 
     let app = Command::new("plat")
         .version("1.0")
@@ -97,44 +99,52 @@ fn main() {
             Command::new("load")
                 .alias("l")
                 .about("Loads a template")
-                .arg(Arg::new("name")
-                    .required(true)
-                    .help("The name of the template to load")
-                    .index(1)),
+                .arg(
+                    Arg::new("name")
+                        .required(true)
+                        .help("The name of the template to load")
+                        .index(1),
+                ),
         )
-        .subcommand(Command::new("link")
-            .arg(Arg::new("name")
-                .help("The name of the template")
-                .index(1))
-            .about("Links the current directory as a template"))
-        .subcommand(Command::new("unlink")
-            .about("Unlinks the current directory as a template"))
-        .subcommand(Command::new("list")
-            .alias("ls")
-            .about("Lists all linked templates"));
+        .subcommand(
+            Command::new("link")
+                .arg(Arg::new("name").help("The name of the template").index(1))
+                .about("Links the current directory as a template"),
+        )
+        .subcommand(Command::new("unlink").about("Unlinks the current directory as a template"))
+        .subcommand(
+            Command::new("list")
+                .alias("ls")
+                .about("Lists all linked templates"),
+        );
 
     let matches = app.clone().get_matches();
 
-    let current_dir = env::current_dir()
-        .expect("Get current directory");
+    let current_dir = env::current_dir().expect("Get current directory");
 
     match matches.subcommand() {
         Some(("link", submatches)) => {
             let mut data = read_data_file();
 
-            let name = submatches.get_one::<String>("name")
-                .map_or_else(|| {
+            let name = submatches.get_one::<String>("name").map_or_else(
+                || {
                     return dialoguer::Input::new()
                         .with_prompt("Enter a name for the template")
                         .interact()
                         .expect("Prompt for template name");
-                }, |name| name.trim().to_string());
+                },
+                |name| name.trim().to_string(),
+            );
 
-            let path = current_dir.to_str()
+            let path = current_dir
+                .to_str()
                 .expect("Convert current directory to string");
 
             if data.contains_key(&name) {
-                println!("A template with the name '{}' already exists, please choose a different name", name);
+                println!(
+                    "A template with the name '{}' already exists, please choose a different name",
+                    name
+                );
                 return;
             }
 
@@ -153,7 +163,8 @@ fn main() {
         Some(("unlink", _)) => {
             let mut data = read_data_file();
 
-            let path = current_dir.to_str()
+            let path = current_dir
+                .to_str()
                 .expect("Convert current directory to string");
 
             data.retain(|_, v| v != path);
@@ -164,13 +175,17 @@ fn main() {
         }
 
         Some(("load", load_matches)) => {
-            let name = load_matches.get_one::<String>("name")
+            let name = load_matches
+                .get_one::<String>("name")
                 .expect("Get name argument");
             let data = read_data_file();
 
             if let Some(path) = data.get(name) {
                 let confirmed = dialoguer::Confirm::new()
-                    .with_prompt(format!("Do you want to load the template '{}' into the current directory?", name))
+                    .with_prompt(format!(
+                        "Do you want to load the template '{}' into the current directory?",
+                        name
+                    ))
                     .interact()
                     .expect("Prompt confirm message before loading");
 

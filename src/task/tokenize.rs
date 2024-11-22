@@ -24,13 +24,14 @@ pub struct Token {
     pub position: Position,
 }
 
-enum CaptureState { Symbol, Newline, WhiteSpace, String, None }
+enum CaptureState { Symbol, Newline, WhiteSpace, String, Regex, None }
 
 fn capture(ch: char) -> CaptureState {
     match ch {
         '"' => CaptureState::String,
-        '{' | '}' | ';' => CaptureState::Symbol,
+        '/' => CaptureState::Regex,
         '\n' => CaptureState::Newline,
+        '{' | '}' | ';' | ':' | '|' | '>' => CaptureState::Symbol,
         _ => {
             if ch.is_whitespace() {
                 CaptureState::WhiteSpace
@@ -40,6 +41,13 @@ fn capture(ch: char) -> CaptureState {
         }
     }
 }
+
+fn read_slice(data: &str, head: &mut usize, tail: &mut usize) -> Arc<str> {
+    let slice = &data[*tail..*head];
+    *tail = *head;
+    return Arc::from(slice);
+}
+
 
 pub fn tokenize(data: &str) -> Vec<Token> {
     let len = data.len();
@@ -100,11 +108,39 @@ pub fn tokenize(data: &str) -> Vec<Token> {
             }
 
             CaptureState::String => {
+                while let Some(ch) = chars.next() {
+                    head += 1;
+                    column += 1;
+
+                    if ch == '\n' {
+                        line += 1;
+                        column = 0;
+                    } else if ch == '\\' {
+                        head += 1;
+                        column += 1;
+                    } else if ch == '"' {
+                        break;
+                    }
+                }
+
+                let slice = &data[tail..head - 1];
+
+                tokens.push(Token {
+                    data: TokenData::String(Arc::from(slice)),
+                    position: Position { line, column },
+                });
+                tail = head;
+            }
+
+            CaptureState::Regex => {
                 for ch in chars.by_ref() {
                     head += 1;
                     column += 1;
 
-                    if ch == '"' {
+                    if ch == '\\' {
+                        head += 1;
+                        column += 1;
+                    } else if ch == '/' {
                         break;
                     }
                 }
