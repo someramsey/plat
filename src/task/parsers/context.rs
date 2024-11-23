@@ -18,7 +18,7 @@ pub struct Node<T> {
     pub position: Position,
 }
 
-pub fn get_result<T>(context: ParseContext<T>) -> Result<Vec<Node<T>>, Vec<Error>> {
+pub fn infer_result<T>(context: ParseContext<T>) -> Result<Vec<Node<T>>, Vec<Error>> {
     if context.failed {
         Err(context.errors)
     } else {
@@ -70,7 +70,7 @@ impl<T> ParseContext<T> {
                 TokenData::Symbol(ch) if ch == symbol => return true,
 
                 _ => {
-                    let kind = data.kind();
+                    let kind = data.stringify();
                     self.throw_at(
                         Arc::from(format!("Expected '{symbol}', found {kind}")),
                         position,
@@ -90,7 +90,7 @@ impl<T> ParseContext<T> {
                 TokenData::Segment(arc) if arc.as_ref() == segment => return true,
 
                 _ => {
-                    let kind = data.kind();
+                    let kind = data.stringify();
                     self.throw_at(
                         Arc::from(format!("Expected '{segment}', found {kind}")),
                         position,
@@ -110,7 +110,7 @@ impl<T> ParseContext<T> {
                 TokenData::Segment(str) => return Some(str),
 
                 _ => {
-                    let kind = data.kind();
+                    let kind = data.stringify();
                     self.throw_at(
                         Arc::from(format!("Expected segment, found {kind}")),
                         position,
@@ -130,7 +130,7 @@ impl<T> ParseContext<T> {
                 TokenData::String(str) => return Some(str),
 
                 _ => {
-                    let kind = data.kind();
+                    let kind = data.stringify();
                     self.throw_at(
                         Arc::from(format!("Expected string, found {kind}")),
                         position,

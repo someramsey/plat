@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use crate::task::error::Error;
-use crate::task::parsers::context::{get_result, Node, ParseContext};
+use crate::task::parsers::context::{infer_result, Node, ParseContext};
 use crate::task::parsers::parse_script::Instruction;
 use crate::task::position::Position;
 use crate::task::tokenize::{Token, TokenData};
@@ -11,7 +11,7 @@ pub enum Validator {
     Custom(Arc<str>),
 }
 
-type SwitchOptions = Arc<Arc<str>>;
+type SwitchOptions = Vec<Arc<str>>;
 
 pub enum FieldData {
     Input(Validator),
@@ -29,13 +29,13 @@ pub fn parse_env(data: Vec<Token>) -> Result<Vec<Node<Field>>, Vec<Error>> {
     let mut context = ParseContext::new(iterator);
 
     while !context.done {
-        once(&mut context);
+        parse_full(&mut context);
     }
 
-    return get_result(context);
+    return infer_result(context);
 }
 
-fn once(context: &mut ParseContext<Field>) {
+fn parse_full(context: &mut ParseContext<Field>) {
     let identifier = match context.read_segment() {
         Some(identifier) => identifier,
         None => return,
@@ -57,29 +57,74 @@ fn once(context: &mut ParseContext<Field>) {
 
     context.expect_symbol('>');
 
-    let data = match context.next() {
+    let data = match parse_data(context) {
+        Some(value) => value,
+        None => return,
+    };
+
+    context.push(Field { identifier, prompt, data });
+}
+
+fn parse_data(context: &mut ParseContext<Field>) -> Option<FieldData> {
+    Some(match context.next() {
         Some(next) => {
             let Token { data, position } = next;
 
             match data {
-                TokenData::String(value) => FieldData::Input(Validator::Custom(value)),
+                TokenData::Symbol('{') => parse_options_list(context),
+                TokenData::Regex(value) => FieldData::Input(Validator::Custom(value)),
 
-                // TokenData::Symbol('{') => {
-                //
-                //
-                //
-                //
-                // }
+                TokenData::Segment(value) => match value.as_ref() {
+                    "text" => FieldData::Input(Validator::Text),
+                    "number" => FieldData::Input(Validator::Number),
+                    _ => {
+                        context.throw_at(Arc::from(format!("Unknown data type '{value}'")), position);
+                        return None;
+                    }
+                },
 
-                _=> {
-                    //throw
-                    return;
+                _ => {
+                    let kind = data.stringify();
+                    context.throw_at(Arc::from(format!("Expected regex, segment or options list, found {kind}")), position);
+                    return None;
                 }
             }
         }
         None => {
-            //throw
-            return;
-        },
-    };
+            context.throw(Arc::from("Expected data options"));
+            return None;
+        }
+    })
+}
+
+fn parse_options_list(context: &mut ParseContext<Field>) -> FieldData {
+    let mut options = Vec::new();
+    let mut coma = false;
+
+    while !context.done {
+        if let Some(Token { data, position }) = context.next() {
+            if let TokenData::Symbol('}') = data {
+                break;
+            }
+
+            if coma {
+                if let TokenData::Symbol(',') = data {
+                    coma = false;
+                } else {
+                    context.throw_at(Arc::from("Expected ','"), position);
+                }
+            } else {
+                if let TokenData::String(value) = data {
+                    options.push(value);
+                    coma = true;
+                } else {
+                    context.throw_at(Arc::from("Expected string literal"), position);
+                }
+            }
+        } else {
+            context.throw(Arc::from("Unexpected end of file, expected '}'"));
+        }
+    }
+
+    FieldData::Switch(options)
 }

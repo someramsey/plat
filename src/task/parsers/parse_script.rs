@@ -1,5 +1,5 @@
 use crate::task::error::Error;
-use crate::task::parsers::context::{get_result, Node, ParseContext};
+use crate::task::parsers::context::{infer_result, Node, ParseContext};
 use crate::task::position::Position;
 use crate::task::tokenize::{Token, TokenData};
 use std::sync::Arc;
@@ -41,7 +41,7 @@ pub fn parse_instructions(data: Vec<Token>) -> Result<Vec<Node<Instruction>>, Ve
         }
     }
 
-    return get_result(context);
+    return infer_result(context);
 }
 
 fn begin_chain(context: &mut ParseContext<Instruction>, chain: Vec<Modifier>, str: &str, position: Position, ) {
