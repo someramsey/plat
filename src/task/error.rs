@@ -1,9 +1,10 @@
 use crate::task::position::Position;
 use std::sync::Arc;
+use crate::task::tokenize::Str;
 
 #[derive(Debug)]
 pub struct Error {
-    pub message: Arc<str>,
+    pub message: Str,
     pub position: Position,
 }
 

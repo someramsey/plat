@@ -1,6 +1,6 @@
 use crate::task::error::Error;
 use crate::task::position::Position;
-use crate::task::tokenize::{Token, TokenData};
+use crate::task::tokenize::{Str, Token, TokenData};
 use std::sync::Arc;
 use std::vec::IntoIter;
 
@@ -55,11 +55,11 @@ impl<T> ParseContext<T> {
         self.nodes.push(Node { data, position: self.pos.clone() });
     }
 
-    pub fn throw(&mut self, message: Arc<str>) {
+    pub fn throw(&mut self, message: Str) {
         self.throw_at(message, self.pos.clone());
     }
 
-    pub fn throw_at(&mut self, message: Arc<str>, position: Position) {
+    pub fn throw_at(&mut self, message: Str, position: Position) {
         self.errors.push(Error { message, position });
         self.failed = true;
     }
@@ -104,7 +104,7 @@ impl<T> ParseContext<T> {
         return false;
     }
 
-    pub fn read_segment(&mut self) -> Option<Arc<str>> {
+    pub fn read_segment(&mut self) -> Option<Str> {
         if let Some(Token { data, position }) = self.next() {
             match data {
                 TokenData::Segment(str) => return Some(str),
@@ -124,7 +124,7 @@ impl<T> ParseContext<T> {
         return None;
     }
 
-    pub fn read_string(&mut self) -> Option<Arc<str>> {
+    pub fn read_string(&mut self) -> Option<Str> {
         if let Some(Token { data, position }) = self.next() {
             match data {
                 TokenData::String(str) => return Some(str),

@@ -1,14 +1,14 @@
 use crate::task::error::Error;
 use crate::task::parsers::context::{infer_result, Node, ParseContext};
 use crate::task::position::Position;
-use crate::task::tokenize::{Token, TokenData};
+use crate::task::tokenize::{Str, Token, TokenData};
 use std::sync::Arc;
 
 #[derive(Debug)]
 pub enum Instruction {
     Copy {
-        origin: Arc<str>,
-        target: Arc<str>,
+        origin: Str,
+        target: Str,
     },
     Write {
         value: String,
@@ -18,8 +18,8 @@ pub enum Instruction {
 }
 
 enum Modifier {
-    At(Arc<str>),
-    To(Arc<str>),
+    At(Str),
+    To(Str),
 }
 
 impl Clone for Modifier {
@@ -90,8 +90,8 @@ fn to_modifier(context: &mut ParseContext<Instruction>, mut chain: Vec<Modifier>
 }
 
 fn copy_command(context: &mut ParseContext<Instruction>, chain: Vec<Modifier>) {
-    let mut origin: Vec<Arc<str>> = Vec::new();
-    let mut target: Vec<Arc<str>> = Vec::new();
+    let mut origin: Vec<Str> = Vec::new();
+    let mut target: Vec<Str> = Vec::new();
 
     for modifier in chain {
         match modifier {
@@ -139,7 +139,7 @@ fn copy_command(context: &mut ParseContext<Instruction>, chain: Vec<Modifier>) {
     });
 }
 
-fn build_path(paths: Vec<Arc<str>>) -> Arc<str> {
+fn build_path(paths: Vec<Str>) -> Str {
     Arc::from(
         paths
             .iter()
@@ -150,7 +150,7 @@ fn build_path(paths: Vec<Arc<str>>) -> Arc<str> {
     )
 }
 
-fn read_string(context: &mut ParseContext<Instruction>, vec: &mut Vec<Arc<str>>) -> bool {
+fn read_string(context: &mut ParseContext<Instruction>, vec: &mut Vec<Str>) -> bool {
     if let Some(str) = context.read_string() {
         vec.push(str);
         true
