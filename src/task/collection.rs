@@ -1,5 +1,5 @@
 use crate::task::error::Error;
-use crate::task::tokenize::Token;
+use crate::task::tokenizer::tokenize::Token;
 
 pub enum Collection<T> {
     Ok(Vec<T>),

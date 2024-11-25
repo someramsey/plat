@@ -2,9 +2,11 @@ use crate::str;
 use crate::task::collection::Collection;
 use crate::task::error::Error;
 use crate::task::position::Position;
-use crate::task::tokenize::{Str, StrExpression, Token, TokenData};
+use crate::task::tokenizer::tokenize::{Token, TokenData};
 use std::sync::Arc;
 use std::vec::IntoIter;
+use crate::task::tokenizer::str::Str;
+use crate::task::tokenizer::str_expr::StrExpression;
 
 pub struct Node<T> {
     pub data: T,
@@ -19,8 +21,8 @@ pub enum ParseState {
 
 pub struct ParseContext<T> {
     pub state: ParseState,
-    pub iterator: IntoIter<Token>,
     pub collection: Collection<Node<T>>,
+    pub iterator: IntoIter<Token>,
 }
 
 impl<T> ParseContext<T> {
@@ -141,7 +143,7 @@ impl<T> ParseContext<T> {
         return None;
     }
 
-    pub fn collection(self) -> Collection<Node<T>> {
-        return self.collection;
+    pub fn is_done(&self) -> bool {
+        return matches!(self.state, ParseState::Done);
     }
 }

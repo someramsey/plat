@@ -1,9 +1,8 @@
-use std::sync::Arc;
-use crate::task::error::Error;
-use crate::task::parsers::context::{infer_result, Node, ParseContext};
-use crate::task::parsers::parse_script::Instruction;
-use crate::task::position::Position;
-use crate::task::tokenize::{Str, StrExpression, Token, TokenData};
+use crate::task::collection::Collection;
+use crate::task::parsers::context::{Node, ParseContext};
+use crate::task::tokenizer::str::Str;
+use crate::task::tokenizer::str_expr::StrExpression;
+use crate::task::tokenizer::tokenize::Token;
 
 pub enum Validator {
     Text,
@@ -37,15 +36,15 @@ pub enum Statement {
     Match(Match)
 }
 
-pub fn parse_env(data: Vec<Token>) -> Result<Vec<Node<Field>>, Vec<Error>> {
+pub fn parse_env(data: Vec<Token>) -> Collection<Node<Field>> {
     let mut iterator = data.into_iter();
     let mut context = ParseContext::new(iterator);
 
-    while !context.done {
+    while !context.is_done() {
         // parse_full(&mut context);
     }
 
-    return infer_result(context);
+    return context.collection;
 }
 //
 // fn parse_full(context: &mut ParseContext<Field>) {

@@ -1,8 +1,9 @@
-use crate::task::error::Error;
-use crate::task::parsers::context::{infer_result, Node, ParseContext};
+use crate::task::parsers::context::{Node, ParseContext};
 use crate::task::position::Position;
-use crate::task::tokenize::{Str, StrExpression, Token, TokenData};
+use crate::task::tokenizer::tokenize::{Token, TokenData};
 use std::sync::Arc;
+use crate::task::collection::Collection;
+use crate::task::tokenizer::str_expr::StrExpression;
 
 #[derive(Debug)]
 pub enum Instruction {
@@ -31,17 +32,17 @@ impl Clone for Modifier {
     }
 }
 
-pub fn parse_instructions(data: Vec<Token>) -> Result<Vec<Node<Instruction>>, Vec<Error>> {
+pub fn parse_instructions(data: Vec<Token>) -> Collection<Node<Instruction>> {
     let mut iterator = data.into_iter();
     let mut context = ParseContext::new(iterator);
 
-    while !context.done {
+    while !context.is_done() {
         if let Some(Token { data: TokenData::Segment(arc), position, }) = context.next() {
             begin_chain(&mut context, Vec::new(), &arc, position);
         }
     }
 
-    return infer_result(context);
+    return context.collection;
 }
 
 fn begin_chain(context: &mut ParseContext<Instruction>, chain: Vec<Modifier>, str: &str, position: Position, ) {
@@ -58,7 +59,7 @@ fn begin_scope(context: &mut ParseContext<Instruction>, chain: Vec<Modifier>) {
         return;
     }
 
-    while !context.done {
+    while !context.is_done() {
         if let Some(Token { data, position }) = context.next() {
             match data {
                 TokenData::Symbol('}') => break,

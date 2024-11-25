@@ -1,48 +1,12 @@
+//TODO: start throwing errors in places like eof at string capture or reading invalid ranges
 use crate::task::collection::Collection;
 use crate::task::position::Position;
+use crate::task::tokenizer::num::Num;
+use crate::task::tokenizer::str::Str;
+use crate::task::tokenizer::str_expr::{StrExpression, StrExpressionItem};
 use std::str::Chars;
 use std::sync::Arc;
 
-#[macro_export]
-macro_rules! str {
-    ($($arg:tt)*) => {
-        Arc::from(format!($($arg)*))
-    };
-}
-
-pub type Str = Arc<str>;
-
-#[derive(Debug)]
-pub enum StrExpressionItem {
-    Literal(Str),
-    Variable(Str),
-}
-
-impl Clone for StrExpressionItem {
-    fn clone(&self) -> Self {
-        match self {
-            StrExpressionItem::Literal(str) => StrExpressionItem::Literal(str.clone()),
-            StrExpressionItem::Variable(str) => StrExpressionItem::Variable(str.clone()),
-        }
-    }
-}
-
-pub type StrExpression = Vec<StrExpressionItem>;
-
-#[derive(Debug)]
-pub enum Num {
-    Integer(i32),
-    Decimal(f32),
-}
-
-impl Num {
-    pub fn stringify(&self) -> Str {
-        match self {
-            Num::Integer(n) => Arc::from(n.to_string()),
-            Num::Decimal(n) => Arc::from(n.to_string()),
-        }
-    }
-}
 #[derive(Debug)]
 pub enum TokenData {
     Segment(Str),
@@ -76,7 +40,7 @@ pub struct Token {
 
 enum CaptureState { Symbol, Newline, WhiteSpace, String, Regex, Variable, None, Number }
 
-fn capture(ch: char) -> CaptureState {
+fn capture_state(ch: char) -> CaptureState {
     match ch {
         '"' => CaptureState::String,
         '/' => CaptureState::Regex,
@@ -95,12 +59,6 @@ fn capture(ch: char) -> CaptureState {
     }
 }
 
-
-//TODO: Move collector to its owwn module, reuse its implementation from parsercontexts
-
-//TODO: move data types to their own module
-//TODO: refactor to a more function based implementation
-//TODO: start throwing errors in places like eof at string capture or reading invalid ranges
 pub fn tokenize(data: &str) -> Collection<Token> {
     let len = data.len();
     let mut chars = data.chars();
@@ -117,7 +75,7 @@ pub fn tokenize(data: &str) -> Collection<Token> {
         head += 1;
         column += 1;
 
-        let state = capture(ch);
+        let state = capture_state(ch);
 
         match state {
             CaptureState::None => {
@@ -287,7 +245,7 @@ fn capture_string(data: &str, chars: &mut Chars, head: &mut usize, tail: &mut us
 }
 
 fn read_interpolated_variable(data: &str, chars: &mut Chars, head: &mut usize, tail: &mut usize, column: &mut i32, line: &mut i32, expression: &mut StrExpression) {
-    while let Some(ch) = chars.next() {
+    for ch in chars.by_ref() {
         *head += 1;
         *column += 1;
 

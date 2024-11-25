@@ -4,7 +4,7 @@
 mod task;
 
 use crate::task::evaluate::evaluate;
-use crate::task::tokenize::tokenize;
+use task::tokenizer::tokenize::tokenize;
 use clap::{Arg, Command};
 use glob::glob;
 use indicatif::ProgressBar;
