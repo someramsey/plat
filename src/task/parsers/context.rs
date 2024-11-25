@@ -1,6 +1,6 @@
 use crate::task::error::Error;
 use crate::task::position::Position;
-use crate::task::tokenize::{Str, Token, TokenData};
+use crate::task::tokenize::{Str, StrExpression, Token, TokenData};
 use std::sync::Arc;
 use std::vec::IntoIter;
 
@@ -25,6 +25,8 @@ pub fn infer_result<T>(context: ParseContext<T>) -> Result<Vec<Node<T>>, Vec<Err
         Ok(context.nodes)
     }
 }
+
+pub type ParseResult<T> = Result<Vec<Node<T>>, Vec<Error>>;
 
 impl<T> ParseContext<T> {
     pub fn new(iterator: IntoIter<Token>) -> ParseContext<T> {
@@ -124,7 +126,7 @@ impl<T> ParseContext<T> {
         return None;
     }
 
-    pub fn read_string(&mut self) -> Option<Str> {
+    pub fn read_string(&mut self) -> Option<StrExpression> {
         if let Some(Token { data, position }) = self.next() {
             match data {
                 TokenData::String(str) => return Some(str),
@@ -142,5 +144,13 @@ impl<T> ParseContext<T> {
         }
 
         return None;
+    }
+
+    pub fn result(self) -> ParseResult<T> {
+        if self.failed {
+            Err(self.errors)
+        } else {
+            Ok(self.nodes)
+        }
     }
 }

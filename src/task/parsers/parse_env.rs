@@ -42,7 +42,7 @@ pub fn parse_env(data: Vec<Token>) -> Result<Vec<Node<Field>>, Vec<Error>> {
     let mut context = ParseContext::new(iterator);
 
     while !context.done {
-        parse_full(&mut context);
+        // parse_full(&mut context);
     }
 
     return infer_result(context);

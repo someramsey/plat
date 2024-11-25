@@ -1,5 +1,6 @@
 pub mod tokenize;
 pub mod evaluate;
-mod position;
-mod parsers;
+pub mod position;
+pub mod parsers;
 pub mod error;
+pub mod collection;
