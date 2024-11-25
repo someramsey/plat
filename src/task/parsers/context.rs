@@ -1,69 +1,64 @@
+use crate::str;
+use crate::task::collection::Collection;
 use crate::task::error::Error;
 use crate::task::position::Position;
 use crate::task::tokenize::{Str, StrExpression, Token, TokenData};
 use std::sync::Arc;
 use std::vec::IntoIter;
 
-pub struct ParseContext<T> {
-    pub done: bool,
-    pub failed: bool,
-    pub pos: Position,
-    pub iterator: IntoIter<Token>,
-    pub nodes: Vec<Node<T>>,
-    pub errors: Vec<Error>,
-}
-
 pub struct Node<T> {
     pub data: T,
     pub position: Position,
 }
 
-pub fn infer_result<T>(context: ParseContext<T>) -> Result<Vec<Node<T>>, Vec<Error>> {
-    if context.failed {
-        Err(context.errors)
-    } else {
-        Ok(context.nodes)
-    }
+pub enum ParseState {
+    Waiting,
+    Working(Position),
+    Done,
 }
 
-pub type ParseResult<T> = Result<Vec<Node<T>>, Vec<Error>>;
+pub struct ParseContext<T> {
+    pub state: ParseState,
+    pub iterator: IntoIter<Token>,
+    pub collection: Collection<Node<T>>,
+}
 
 impl<T> ParseContext<T> {
     pub fn new(iterator: IntoIter<Token>) -> ParseContext<T> {
-        ParseContext {
+        ParseContext::<T> {
             iterator,
-            done: false,
-            failed: false,
-            pos: Position { line: 0, column: 0 },
-            nodes: Vec::new(),
-            errors: Vec::new(),
+            state: ParseState::Waiting,
+            collection: Collection::<Node<T>>::new(),
         }
     }
 
     pub fn next(&mut self) -> Option<Token> {
-        match self.iterator.next() {
+        return match self.iterator.next() {
             Some(token) => {
-                self.pos = token.position.clone();
+                self.state = ParseState::Working(token.position.clone());
                 Some(token)
             }
             None => {
-                self.done = true;
+                self.state = ParseState::Done;
                 None
             }
-        }
+        };
     }
 
     pub fn push(&mut self, data: T) {
-        self.nodes.push(Node { data, position: self.pos.clone() });
+        if let ParseState::Working(pos) = &self.state {
+            self.collection.push(Node { data, position: pos.clone() });
+        }
     }
 
     pub fn throw(&mut self, message: Str) {
-        self.throw_at(message, self.pos.clone());
+        if let ParseState::Working(pos) = &self.state {
+            self.throw_at(message, pos.clone());
+        }
     }
 
     pub fn throw_at(&mut self, message: Str, position: Position) {
-        self.errors.push(Error { message, position });
-        self.failed = true;
+        self.collection.throw(Error { message, position });
     }
 
     pub fn expect_symbol(&mut self, symbol: char) -> bool {
@@ -74,13 +69,13 @@ impl<T> ParseContext<T> {
                 _ => {
                     let kind = data.stringify();
                     self.throw_at(
-                        Arc::from(format!("Expected '{symbol}', found {kind}")),
+                        str!("Expected '{symbol}', found {kind}"),
                         position,
                     )
                 }
             }
         } else {
-            self.throw(Arc::from(format!("Expected '{symbol}'")));
+            self.throw(str!("Expected '{symbol}'"));
         }
 
         return false;
@@ -94,13 +89,13 @@ impl<T> ParseContext<T> {
                 _ => {
                     let kind = data.stringify();
                     self.throw_at(
-                        Arc::from(format!("Expected '{segment}', found {kind}")),
+                        str!("Expected '{segment}', found {kind}"),
                         position,
                     )
                 }
             }
         } else {
-            self.throw(Arc::from(format!("Expected '{segment}'")));
+            self.throw(str!("Expected '{segment}'"));
         }
 
         return false;
@@ -114,7 +109,7 @@ impl<T> ParseContext<T> {
                 _ => {
                     let kind = data.stringify();
                     self.throw_at(
-                        Arc::from(format!("Expected segment, found {kind}")),
+                        str!("Expected segment, found {kind}"),
                         position,
                     );
                 }
@@ -134,7 +129,7 @@ impl<T> ParseContext<T> {
                 _ => {
                     let kind = data.stringify();
                     self.throw_at(
-                        Arc::from(format!("Expected string, found {kind}")),
+                        str!("Expected string, found {kind}"),
                         position,
                     );
                 }
@@ -146,11 +141,7 @@ impl<T> ParseContext<T> {
         return None;
     }
 
-    pub fn result(self) -> ParseResult<T> {
-        if self.failed {
-            Err(self.errors)
-        } else {
-            Ok(self.nodes)
-        }
+    pub fn collection(self) -> Collection<Node<T>> {
+        return self.collection;
     }
 }

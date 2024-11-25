@@ -2,7 +2,7 @@ use crate::task::error::Error;
 use crate::task::tokenize::Token;
 
 pub enum Collection<T> {
-    Ok(Vec<Token>),
+    Ok(Vec<T>),
     Failed(Vec<Error>),
 }
 

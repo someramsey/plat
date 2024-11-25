@@ -1,9 +1,14 @@
+use crate::task::collection::Collection;
+use crate::task::position::Position;
 use std::str::Chars;
 use std::sync::Arc;
-use crate::task::collection::Collection;
-use crate::task::error::Error;
-use crate::task::parsers::context::{Node, ParseContext, ParseResult};
-use crate::task::position::Position;
+
+#[macro_export]
+macro_rules! str {
+    ($($arg:tt)*) => {
+        Arc::from(format!($($arg)*))
+    };
+}
 
 pub type Str = Arc<str>;
 
