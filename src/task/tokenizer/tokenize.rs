@@ -6,6 +6,8 @@ use crate::task::tokenizer::str::Str;
 use crate::task::tokenizer::str_expr::{StrExpression, StrExpressionItem};
 use std::str::Chars;
 use std::sync::Arc;
+use crate::str;
+use crate::task::error::Error;
 
 #[derive(Debug)]
 pub enum TokenData {
@@ -40,6 +42,40 @@ pub struct Token {
 
 enum CaptureState { Symbol, Newline, WhiteSpace, String, Regex, Variable, None, Number }
 
+struct Cursor<'a> {
+    data: &'a str,
+    head: usize,
+    tail: usize,
+    position: Position,
+}
+
+impl<'a> Cursor<'a> {
+    pub fn new(data: &'a str) -> Self {
+        Self { data, head: 0, tail: 0, position: Position::new() }
+    }
+
+    pub fn slice(&self) -> Str {
+        self.slice_off(0)
+    }
+
+    pub fn slice_off(&self, offset: usize) -> Str {
+        Arc::from(&self.data[self.tail..self.head - offset])
+    }
+
+    pub fn shift(&mut self) {
+        self.head += 1;
+        self.position.shift();
+    }
+
+    pub fn pull(&mut self) {
+        self.tail = self.head;
+    }
+
+    pub fn selection(&self) -> usize {
+        self.head - self.tail
+    }
+}
+
 fn capture_state(ch: char) -> CaptureState {
     match ch {
         '"' => CaptureState::String,
@@ -63,64 +99,59 @@ pub fn tokenize(data: &str) -> Collection<Token> {
     let len = data.len();
     let mut chars = data.chars();
 
-    let mut head = 0;
-    let mut tail = 0;
-
-    let mut column = 0;
-    let mut line = 0;
+    let mut cursor = Cursor::new(data);
+    let mut position = Position::new();
 
     let mut collection: Collection<Token> = Collection::new();
 
     while let Some(ch) = chars.next() {
-        head += 1;
-        column += 1;
+        cursor.shift();
 
         let state = capture_state(ch);
 
         match state {
             CaptureState::None => {
-                if head == len && head - tail > 0 {
-                    let slice = &data[tail..head];
-                    tail = head;
+                if cursor.head == len && cursor.selection() > 0 {
+                    let slice = cursor.slice();
+                    cursor.pull();
 
                     collection.push(Token {
-                        data: TokenData::Segment(Arc::from(slice)),
-                        position: Position { line, column },
+                        data: TokenData::Segment(slice),
+                        position: position.clone(),
                     });
                 }
             }
             _ => {
-                if head - tail > 1 {
-                    let slice = &data[tail..head - 1];
+                if cursor.selection() > 1 {
+                    let slice = cursor.slice_off(1);
 
                     collection.push(Token {
                         data: TokenData::Segment(Arc::from(slice)),
-                        position: Position { line, column },
+                        position: position.clone(),
                     });
                 }
 
-                tail = head;
+                cursor.pull();
             }
         }
 
         match state {
-            CaptureState::Newline => {
-                line += 1;
-                column = 0;
-            }
+            CaptureState::Newline => position.newline(),
 
             CaptureState::Symbol => {
-                tail = head;
+                cursor.pull();
+
                 collection.push(Token {
                     data: TokenData::Symbol(ch),
-                    position: Position { line, column },
+                    position: position.clone(),
                 });
             }
 
-            CaptureState::Regex => capture_regex(&data, &mut chars, &mut head, &mut tail, &mut column, &mut line, &mut collection),
-            CaptureState::String => capture_string(&data, &mut chars, &mut head, &mut tail, &mut column, &mut line, &mut collection),
-            CaptureState::Variable => capture_variable(&data, &mut chars, &mut head, &mut tail, &mut column, &mut line, &mut collection),
-            CaptureState::Number => capture_number(&data, &mut chars, &mut head, &mut tail, &mut column, &mut line, &mut collection),
+            //TODO: add a cursor struct to contain head, tail, column, line vars
+            CaptureState::Regex => capture_regex(data, &mut chars, &mut cursor, &mut position, &mut collection),
+            CaptureState::String => capture_string(data, &mut chars, &mut cursor, &mut position, &mut collection),
+            CaptureState::Variable => capture_variable(data, &mut chars, &mut cursor, &mut position, &mut collection),
+            CaptureState::Number => capture_number(data, &mut chars, &mut cursor, &mut position, &mut collection),
 
             _ => unreachable!("Invalid state"),
         }
@@ -130,132 +161,127 @@ pub fn tokenize(data: &str) -> Collection<Token> {
 }
 
 
-fn capture_number(data: &str, chars: &mut Chars, head: &mut usize, tail: &mut usize, column: &mut i32, line: &mut i32, collector: &mut Collection<Token>) {
+fn capture_number(data: &str, chars: &mut Chars, cursor: &mut Cursor, position: &mut Position, collector: &mut Collection<Token>) {
     let mut ranged = true;
     let mut mantissa = false;
 
-    while let Some(ch) = chars.next() {
-        *line += 1;
-        *column = 0;
+    for ch in chars.by_ref() {
+        position.newline();
 
         if (!ch.is_numeric()) {
-            if ch == '.' {} else {
-                break;
-            }
+            //TODO: impl
         }
     }
 
-    let slice = Arc::from(&data[*tail..*head - 1usize]);
-    *tail = *head;
+    let slice = cursor.slice_off(1);
+    cursor.pull();
 
     collector.push(Token {
         data: TokenData::Variable(slice),
-        position: Position { line: *line, column: *column },
+        position: position.clone(),
     });
 }
 
-fn capture_variable(data: &str, chars: &mut Chars, head: &mut usize, tail: &mut usize, column: &mut i32, line: &mut i32, collector: &mut Collection<Token>) {
-    while let Some(ch) = chars.next() {
-        *line += 1;
-        *column = 0;
+fn capture_variable(data: &str, chars: &mut Chars, cursor: &mut Cursor, position: &mut Position, collector: &mut Collection<Token>) {
+    for ch in chars.by_ref() {
+        cursor.shift();
 
         if (!ch.is_alphanumeric()) {
             break;
         }
     }
 
-    let slice = Arc::from(&data[*tail..*head - 1usize]);
-    *tail = *head;
+    let slice = cursor.slice_off(1);
+    cursor.pull();
 
     collector.push(Token {
         data: TokenData::Variable(slice),
-        position: Position { line: *line, column: *column },
+        position: position.clone(),
     });
 }
 
-fn capture_regex(data: &str, chars: &mut Chars, head: &mut usize, tail: &mut usize, column: &mut i32, line: &mut i32, collector: &mut Collection<Token>) {
-    while let Some(ch) = chars.next() {
-        *head += 1;
-        *column += 1;
+fn capture_regex(data: &str, chars: &mut Chars, cursor: &mut Cursor, position: &mut Position, collector: &mut Collection<Token>) {
+    for ch in chars.by_ref() {
+        cursor.shift();
 
         if ch == '\n' {
-            *line += 1;
-            *column = 0;
+            position.newline();
         } else if ch == '\\' {
-            *head += 1;
-            *column += 1;
+            cursor.shift();
         } else if ch == '/' {
             break;
         }
     }
 
-    let slice = Arc::from(&data[*tail..*head - 1usize]);
-    *tail = *head;
+    let slice = cursor.slice_off(1);
+    cursor.pull();
 
     collector.push(Token {
         data: TokenData::Regex(slice),
-        position: Position { line: *line, column: *column },
+        position: position.clone(),
     });
 }
 
-fn capture_string(data: &str, chars: &mut Chars, head: &mut usize, tail: &mut usize, column: &mut i32, line: &mut i32, collector: &mut Collection<Token>) {
+fn capture_string(data: &str, chars: &mut Chars, cursor: &mut Cursor, position: &mut Position, collection: &mut Collection<Token>) {
     let mut expression: StrExpression = Vec::new();
 
-    while let Some(ch) = chars.next() {
-        *head += 1;
-        *column += 1;
+    loop {
+        match chars.next() {
+            Some(ch) => {
+                cursor.shift();
 
-        if ch == '\n' {
-            *line += 1;
-            *column = 0;
-        } else if ch == '\\' {
-            *head += 1;
-            *column += 1;
-        } else if ch == '$' {
-            if let Some(next) = chars.next() {
-                *head += 1;
-                *column += 1;
-
-                if next == '{' {
-                    if *head - *tail > 0 {
-                        let slice = Arc::from(&data[*tail..*head - 2usize]);
+                if ch == '\n' {
+                    position.newline();
+                } else if ch == '\\' {
+                    cursor.shift();
+                } else if ch == '$' {
+                    if cursor.selection() > 0 {
+                        let slice = cursor.slice_off(2);
                         expression.push(StrExpressionItem::Literal(slice));
                     }
 
-                    *tail = *head;
-                    read_interpolated_variable(&data, chars, head, tail, column, line, &mut expression);
+                    cursor.pull();
+                    read_interpolated_variable(&data, chars, cursor, position, &mut expression);
+                } else if ch == '"' {
+                    break;
                 }
             }
-        } else if ch == '"' {
-            break;
+
+            None => {
+                collection.throw(Error {
+                    message: str!("Unexpected EOF while capturing string"),
+                    position: position.clone(),
+                });
+
+                return;
+            }
         }
     }
 
-    if *head - *tail > 1 { //TODO: test if 1 is correct instead of 0
-        let slice = Arc::from(&data[*tail..*head - 1usize]);
+    if cursor.selection() > 1 { //TODO: test if 1 is correct instead of 0
+        let slice= cursor.slice_off(1);
         expression.push(StrExpressionItem::Literal(slice));
     }
 
-    *tail = *head;
+    cursor.pull();
 
-    collector.push(Token {
+    collection.push(Token {
         data: TokenData::String(expression),
-        position: Position { line: *line, column: *column },
+        position: position.clone(),
     });
 }
 
-fn read_interpolated_variable(data: &str, chars: &mut Chars, head: &mut usize, tail: &mut usize, column: &mut i32, line: &mut i32, expression: &mut StrExpression) {
+fn read_interpolated_variable(data: &str, chars: &mut Chars, cursor: &mut Cursor, position: &mut Position, expression: &mut StrExpression) {
     for ch in chars.by_ref() {
-        *head += 1;
-        *column += 1;
+        cursor.shift();
 
         if ch == '\n' {
-            *line += 1;
-            *column = 0;
+            position.newline();
         } else if ch == '}' {
-            let slice = Arc::from(&data[*tail..*head - 1usize]);
+            let slice = cursor.slice_off(1);
             expression.push(StrExpressionItem::Variable(slice));
-            *tail = *head;
+            
+            cursor.pull();
             break;
         }
     }
