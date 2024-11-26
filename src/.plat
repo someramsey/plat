@@ -1,3 +1,3 @@
-at "a" {
+attt "a" {
     copy at $a to "b/$c";
 }
