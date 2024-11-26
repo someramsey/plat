@@ -9,7 +9,7 @@ pub struct Error {
 }
 
 impl Error {
-    pub fn new(message: String, position: Position) -> Self {
+    pub fn new(message: &str, position: Position) -> Self {
         Self {
             message: Arc::from(message),
             position,

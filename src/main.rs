@@ -81,15 +81,15 @@ fn load(origin: PathBuf, target: PathBuf, progress_bar: ProgressBar) {
 }
 
 fn main() {
-    let file = File::open("src/.plat").unwrap();
-    let mut reader = BufReader::new(&file);
-
-    let mut data = String::new();
-    reader.read_to_string(&mut data).unwrap();
-
-    let tokens = tokenize(&data);
-
-    println!("{:?}", tokens);
+    // let file = File::open("src/.plat").unwrap();
+    // let mut reader = BufReader::new(&file);
+    //
+    // let mut data = String::new();
+    // reader.read_to_string(&mut data).unwrap();
+    //
+    // let tokens = tokenize(&data);
+    //
+    // println!("{:?}", tokens);
 
 
 
