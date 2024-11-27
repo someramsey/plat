@@ -50,192 +50,158 @@ pub fn tokenize(fragments: Vec<Fragment>) -> Collection<Token> {
 
     return collection;
 }
-//numeric
-//numeric.numeric
-//numeric..numeric
-//numeric.numeric..numeric
-//numeric.numeric..numeric.numeric
+
 fn capture(fragment: Fragment, mut collection: &mut Collection<Token>, mut iter: &mut IntoIter<Fragment>) {
     if let FragmentData::Symbol(ch) = fragment.data {
-        if ch == '/' {
-            capture_regex(&mut iter, &mut collection);
-        } else if ch == '"' {
-            capture_string(&mut iter, &mut collection);
-        } else {
-            collection.push(Token {
+        match ch {
+            '/' => capture_regex(iter, collection),
+            '"' => capture_string(iter, collection),
+            '$' => capture_variable(fragment.position, iter, collection),
+
+            _ => collection.push(Token {
                 data: TokenData::Symbol(ch),
                 position: fragment.position.clone(),
-            });
+            })
         }
     } else if let FragmentData::Numeric(first_slice) = fragment.data {
-        if let Some(next) = iter.next() {
-            if let FragmentData::Symbol('.') = next.data {
-                //expect numeric or range
-                if let Some(second) = iter.next() {
-                    match second.data {
-                        //numeric
-                        FragmentData::Numeric(second_slice) => {
-                            //check range after decimal
-                            if let Some(next) = iter.next() {
-                                if let FragmentData::Symbol('.') = next.data {
-                                    if let Some(next) = iter.next() {
-                                        if let FragmentData::Symbol('.') = next.data {
-                                            //RIGHT
-                                            //expect numeric
-                                            if let Some(next) = iter.next() {
-                                                if let FragmentData::Numeric(third_slice) = next.data {
-                                                    if let Some(next) = iter.next() {
-                                                        if let FragmentData::Symbol('.') = next.data {
-                                                            if let Some(next) = iter.next() {
-                                                                if let FragmentData::Numeric(fourth_slice) = next.data {
-                                                                    println!("range {}.{}..{}.{}", first_slice, second_slice, third_slice, fourth_slice);
-                                                                } else {
-                                                                    collection.throw(Error {
-                                                                        message: str!("Expected numeric after '.'"),
-                                                                        position: second.position.clone(),
-                                                                    });
+        capture_numeric(first_slice, collection, iter);
+    } else if let FragmentData::AlphaNumeric(slice) = fragment.data {
+        collection.push(Token {
+            data: TokenData::Segment(Arc::from(slice)),
+            position: fragment.position.clone(),
+        });
+    }
+}
 
-                                                                    capture(next, collection, iter);
-                                                                }
-                                                            } else {
-                                                                collection.throw(Error {
-                                                                    message: str!("Expected numeric after '.'"),
-                                                                    position: second.position.clone(),
-                                                                });
-                                                            }
-                                                        } else {
-                                                            println!("range {}.{}..{}", first_slice, second_slice, third_slice);
+fn capture_variable(last: Position, iter: &mut IntoIter<Fragment>, collection: &mut Collection<Token>) {
+    let next = match iter.next() {
+        Some(next) => next,
+        None => {
+            collection.throw(Error {
+                message: str!("Unexpected EOF while capturing variable"),
+                position: last.clone(),
+            });
 
-                                                            capture(next, collection, iter);
-                                                        }
-                                                    } else {
-                                                        println!("range {}.{}..{}", first_slice, second_slice, third_slice);
-                                                    }
-                                                } else {
-                                                    collection.throw(Error {
-                                                        message: str!("Expected numeric after '..'"),
-                                                        position: second.position.clone(),
-                                                    });
+            return;
+        }
+    };
+    
+    match next {
+        Fragment { data: FragmentData::AlphaNumeric(slice), position } => {
+            collection.push(Token {
+                data: TokenData::Variable(Arc::from(slice)),
+                position: position.clone(),
+            });
+        }
 
-                                                    capture(next, collection, iter);
-                                                }
-                                            } else {
-                                                collection.throw(Error {
-                                                    message: str!("Expected numeric after '..'"),
-                                                    position: second.position.clone(),
-                                                });
-                                            }
-                                        } else {
-                                            collection.throw(Error {
-                                                message: str!("Expected '.'"),
-                                                position: second.position.clone(),
-                                            });
-
-                                            capture(next, collection, iter);
-                                        }
-                                    } else {
-                                        collection.throw(Error {
-                                            message: str!("Expected '.'"),
-                                            position: second.position.clone(),
-                                        });
-                                    }
-                                } else {
-                                    println!("decimal {}.{}", first_slice, second_slice);
-                                    capture(next, collection, iter);
-                                }
-                            } else {
-                                println!("decimal {}.{}", first_slice, second_slice);
-                            }
-                        }
-
-                        //range
-                        FragmentData::Symbol('.') => {
-                            if let Some(next) = iter.next() {
-                                if let FragmentData::Symbol('.') = next.data {
-                                    //RIGHT
-                                    //expect numeric
-                                    if let Some(next) = iter.next() {
-                                        if let FragmentData::Numeric(third_slice) = next.data {
-                                            if let Some(next) = iter.next() {
-                                                if let FragmentData::Symbol('.') = next.data {
-                                                    if let Some(next) = iter.next() {
-                                                        if let FragmentData::Numeric(fourth_slice) = next.data {
-                                                            println!("range {}..{}.{}", first_slice, third_slice, fourth_slice);
-                                                        } else {
-                                                            collection.throw(Error {
-                                                                message: str!("Expected numeric after '.'"),
-                                                                position: second.position.clone(),
-                                                            });
-
-                                                            capture(next, collection, iter);
-                                                        }
-                                                    } else {
-                                                        collection.throw(Error {
-                                                            message: str!("Expected numeric after '.'"),
-                                                            position: second.position.clone(),
-                                                        });
-                                                    }
-                                                } else {
-                                                    println!("range {}..{}", first_slice, third_slice);
-
-                                                    capture(next, collection, iter);
-                                                }
-                                            } else {
-                                                println!("range {}..{}", first_slice, third_slice);
-                                            }
-                                        } else {
-                                            collection.throw(Error {
-                                                message: str!("Expected numeric after '..'"),
-                                                position: second.position.clone(),
-                                            });
-
-                                            capture(next, collection, iter);
-                                        }
-                                    } else {
-                                        collection.throw(Error {
-                                            message: str!("Expected numeric after '..'"),
-                                            position: second.position.clone(),
-                                        });
-                                    }
-                                } else {
-                                    collection.throw(Error {
-                                        message: str!("Expected '.'"),
-                                        position: second.position.clone(),
-                                    });
-
-                                    capture(next, collection, iter);
-                                }
-                            } else {
-                                collection.throw(Error {
-                                    message: str!("Expected '.'"),
-                                    position: second.position.clone(),
-                                });
-                            }
-                        }
-
-                        _ => {
-                            collection.throw(Error {
-                                message: str!("Expected numeric after '.'"),
-                                position: second.position.clone(),
-                            });
-
-                            capture(next, collection, iter);
-                        }
-                    }
-                } else {
-                    collection.throw(Error {
-                        message: str!("Unexpected EOF after '.'"),
-                        position: fragment.position.clone(),
-                    });
-                }
-            } else {
-                println!("integer {}", first_slice);
-                capture(next, collection, iter);
-            }
-        } else {
-            println!("integer {}", first_slice);
+        _ => {
+            collection.throw(Error {
+                message: str!("Expected variable identifier after '$'"),
+                position: next.position.clone(),
+            });
         }
     }
+}
+
+fn capture_numeric(first_slice: &str, mut collection: &mut Collection<Token>, mut iter: &mut IntoIter<Fragment>) {
+    let left = match capture_num_value(first_slice, iter, collection) {
+        Ok(num) => num,
+        Err(error) => {
+            collection.throw(error);
+            return;
+        }
+    };
+
+    if !matches!(
+        (iter.next(), iter.next()),
+        (
+            Some(Fragment { data: FragmentData::Symbol('.'), .. }),
+            Some(Fragment { data: FragmentData::Symbol('.'), .. })
+        )
+    ) {
+        iter.next_back();
+        iter.next_back();
+
+        collection.push(Token {
+            data: TokenData::Number(left),
+            position: Position::new(),
+        });
+
+        return;
+    }
+
+    let second_slice = match iter.next() {
+        Some(Fragment { data: FragmentData::Numeric(slice), .. }) => slice,
+        None | Some(_) => {
+            collection.throw(Error {
+                message: str!("Expected right side of range after '..'"),
+                position: Position::new(),
+            });
+
+            return;
+        }
+    };
+
+    let right = match capture_num_value(second_slice, iter, collection) {
+        Ok(num) => num,
+        Err(error) => {
+            collection.throw(error);
+            return;
+        }
+    };
+
+    collection.push(Token {
+        data: TokenData::Range(left, right),
+        position: Position::new(),
+    });
+}
+
+fn capture_num_value(first_slice: &str, mut iter: &mut IntoIter<Fragment>, mut collection: &mut Collection<Token>) -> Result<Num, Error> {
+    let last_position = match iter.next() {
+        Some(Fragment { data: FragmentData::Symbol('.'), position }) => position,
+
+        Some(_) | None => {
+            iter.next_back();
+
+            let value = first_slice.parse::<i32>()
+                .expect("Unexpected error, failde to parse integer slice");
+
+            return Ok(Num::Integer(value));
+        }
+    };
+
+    return match iter.next() {
+        Some(next) => match next.data {
+            FragmentData::Numeric(second_slice) => {
+                let value = format!("{}.{}", first_slice, second_slice)
+                    .parse::<f32>()
+                    .or(Err(Error {
+                        message: str!("Failed to parse number"),
+                        position: next.position.clone(),
+                    }))?;
+
+                Ok(Num::Decimal(value))
+            }
+
+            _ => {
+                iter.next_back();
+
+                Err(Error {
+                    message: str!("Invalid token, expected numeric or range after '.'"),
+                    position: next.position.clone(),
+                })
+            }
+        }
+
+        None => {
+            iter.next_back();
+
+            Err(Error {
+                message: str!("Unexpected EOF, expected numeric after '.'"),
+                position: last_position.clone(),
+            })
+        }
+    };
 }
 
 

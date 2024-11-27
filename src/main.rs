@@ -3,17 +3,16 @@
 
 mod task;
 
-use crate::task::evaluate::evaluate;
-use task::tokenizer::tokenize::tokenize;
+use crate::task::fragmentize::fragmentize;
 use clap::{Arg, Command};
-use glob::glob;
 use indicatif::ProgressBar;
 use std::collections::HashMap;
 use std::env;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Seek, Write};
 use std::path::PathBuf;
-use std::sync::Arc;
+use task::tokenizer::tokenize::tokenize;
+use crate::task::collection::Collection;
 
 fn open_data_file() -> File {
     let path = env::current_exe()
@@ -81,15 +80,25 @@ fn load(origin: PathBuf, target: PathBuf, progress_bar: ProgressBar) {
 }
 
 fn main() {
-    // let file = File::open("src/.plat").unwrap();
-    // let mut reader = BufReader::new(&file);
-    //
-    // let mut data = String::new();
-    // reader.read_to_string(&mut data).unwrap();
-    //
-    // let tokens = tokenize(&data);
-    //
-    // println!("{:?}", tokens);
+    let file = File::open("src/.plat").unwrap();
+    let mut reader = BufReader::new(&file);
+
+    let mut data = String::new();
+    reader.read_to_string(&mut data).unwrap();
+
+    let fragments = fragmentize(&data);
+
+    // for fragment in fragments {
+    //     println!("{:?}", fragment);
+    // }
+
+    let tokens = tokenize(fragments);
+    
+    if let Collection::Ok(tokens) = tokens {
+        for token in tokens {
+            println!("{:?}", token);
+        }
+    }
 
 
 
