@@ -1,4 +1,4 @@
-$username: Input > "What is your username?" :: /^[a-zA-Z0-9_]{3,16}$/
+dw$username: Input > "What is your username?" :: /^[a-zA-Z0-9_]{3,16}$/
 $age: Integer > "What is your age?" :: 0..150
 $height: Decimal > "What is your height?"
 $color: Choice > "What is your favorite color?" {

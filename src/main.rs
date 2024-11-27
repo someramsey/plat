@@ -3,7 +3,7 @@
 
 mod task;
 
-use crate::task::fragmentize::fragmentize;
+use task::layers::fragmentize::fragmentize;
 use clap::{Arg, Command};
 use indicatif::ProgressBar;
 use std::collections::HashMap;
@@ -11,8 +11,10 @@ use std::env;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Seek, Write};
 use std::path::PathBuf;
-use task::tokenizer::tokenize::tokenize;
+use task::layers::tokenize::tokenize;
 use crate::task::collection::Collection;
+use crate::task::layers::parsers::parse_env::parse_env;
+use crate::task::layers::parsers::parse_script::parse_instructions;
 
 fn open_data_file() -> File {
     let path = env::current_exe()
@@ -80,29 +82,38 @@ fn load(origin: PathBuf, target: PathBuf, progress_bar: ProgressBar) {
 }
 
 fn main() {
-    let file = File::open("src/.plat").unwrap();
+    let file = File::open("src/.platenv").unwrap();
     let mut reader = BufReader::new(&file);
 
     let mut data = String::new();
     reader.read_to_string(&mut data).unwrap();
 
+    //TODO: reimplement fragmentize and fix tokenizer based off it
+
     let fragments = fragmentize(&data);
-
-    // for fragment in fragments {
-    //     println!("{:?}", fragment);
-    // }
-
     let tokens = tokenize(fragments);
-    
-    if let Collection::Ok(tokens) = tokens {
-        for token in tokens {
-            println!("{:?}", token);
+
+
+    match tokens {
+        Collection::Ok(tokens) => {
+            for token in tokens {
+                println!("{:?}", token);
+            }
+
+            // let fields = parse_env(tokens);
+            //
+            // println!("{:?}", fields);
+        }
+
+        Collection::Failed(errors) => {
+            for error in errors {
+                println!("{:?}", error);
+            }
         }
     }
 
 
 
-    // let instructions = parse_instructions(tokens);
 
 
     return;

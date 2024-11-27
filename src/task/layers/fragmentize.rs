@@ -67,11 +67,12 @@ pub fn fragmentize(data: &str) -> Vec<Fragment> {
 
             State::Alphanumeric => {
                 if !ch.is_alphanumeric() {
-                    fragments.push(Fragment {
-                        data: FragmentData::AlphaNumeric(&data[tail..head]),
-                        position: position.clone(),
-                    });
-
+                    if head - tail > 0 {
+                        fragments.push(Fragment {
+                            data: FragmentData::AlphaNumeric(&data[tail..head]),
+                            position: position.clone(),
+                        });
+                    }
                     tail = head;
 
                     if ch.is_whitespace() {
@@ -79,17 +80,19 @@ pub fn fragmentize(data: &str) -> Vec<Fragment> {
                     } else {
                         capture_symbol(&mut fragments, &mut position, ch);
                         state = State::None;
+                        tail = head + 1;
                     }
                 }
             }
 
             State::Numeric => {
                 if !ch.is_numeric() {
-                    fragments.push(Fragment {
-                        data: FragmentData::Numeric(&data[tail..head]),
-                        position: position.clone(),
-                    });
-
+                    if head - tail > 0 {
+                        fragments.push(Fragment {
+                            data: FragmentData::Numeric(&data[tail..head]),
+                            position: position.clone(),
+                        });
+                    }
                     tail = head;
 
                     if ch.is_alphabetic() {
@@ -98,7 +101,9 @@ pub fn fragmentize(data: &str) -> Vec<Fragment> {
                         state = State::Whitespace;
                     } else {
                         capture_symbol(&mut fragments, &mut position, ch);
+                        tail = head + 1;
                     }
+
                 }
             }
         }

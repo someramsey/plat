@@ -1,20 +1,23 @@
 use crate::task::collection::Collection;
-use crate::task::parsers::context::{Node, ParseContext};
-use crate::task::tokenizer::str::Str;
-use crate::task::tokenizer::str_expr::StrExpression;
-use crate::task::tokenizer::tokenize::Token;
+use crate::task::layers::parsers::context::{Node, ParseContext};
+use crate::task::data::str::Str;
+use crate::task::data::str_expr::StrExpression;
+use crate::task::layers::tokenize::Token;
 
+#[derive(Debug)]
 pub enum Validator {
     Text,
     Number,
     Custom(Str),
 }
 
+#[derive(Debug)]
 pub enum FieldData {
     Input(Validator),
     Switch(Vec<StrExpression>),
 }
 
+#[derive(Debug)]
 pub struct Field {
     pub identifier: Str,
     pub prompt: Str,

@@ -2,10 +2,10 @@ use crate::str;
 use crate::task::collection::Collection;
 use crate::task::error::Error;
 use crate::task::position::Position;
-use crate::task::fragmentize::{Fragment, FragmentData};
-use crate::task::tokenizer::num::Num;
-use crate::task::tokenizer::str::Str;
-use crate::task::tokenizer::str_expr::{StrExpression, StrExpressionItem};
+use crate::task::layers::fragmentize::{Fragment, FragmentData};
+use crate::task::data::num::Num;
+use crate::task::data::str::Str;
+use crate::task::data::str_expr::{StrExpression, StrExpressionItem};
 use std::sync::Arc;
 use std::vec::IntoIter;
 
@@ -85,7 +85,7 @@ fn capture_variable(last: Position, iter: &mut IntoIter<Fragment>, collection: &
             return;
         }
     };
-    
+
     match next {
         Fragment { data: FragmentData::AlphaNumeric(slice), position } => {
             collection.push(Token {
@@ -164,7 +164,10 @@ fn capture_num_value(first_slice: &str, mut iter: &mut IntoIter<Fragment>, mut c
             iter.next_back();
 
             let value = first_slice.parse::<i32>()
-                .expect("Unexpected error, failde to parse integer slice");
+                .or(Err(Error {
+                    message: str!("Failed to parse number {first_slice}"),
+                    position: Position::new(), //TODO: Fix this
+                }))?;
 
             return Ok(Num::Integer(value));
         }

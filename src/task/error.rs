@@ -1,6 +1,6 @@
 use crate::task::position::Position;
 use std::sync::Arc;
-use crate::task::tokenizer::str::Str;
+use crate::task::data::str::Str;
 
 #[derive(Debug)]
 pub struct Error {

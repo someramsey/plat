@@ -2,12 +2,13 @@ use crate::str;
 use crate::task::collection::Collection;
 use crate::task::error::Error;
 use crate::task::position::Position;
-use crate::task::tokenizer::tokenize::{Token, TokenData};
+use crate::task::layers::tokenize::{Token, TokenData};
 use std::sync::Arc;
 use std::vec::IntoIter;
-use crate::task::tokenizer::str::Str;
-use crate::task::tokenizer::str_expr::StrExpression;
+use crate::task::data::str::Str;
+use crate::task::data::str_expr::StrExpression;
 
+#[derive(Debug)]
 pub struct Node<T> {
     pub data: T,
     pub position: Position,
