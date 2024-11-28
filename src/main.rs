@@ -91,26 +91,30 @@ fn main() {
     //TODO: reimplement fragmentize and fix tokenizer based off it
 
     let fragments = fragmentize(&data);
-    let tokens = tokenize(fragments);
-
-
-    match tokens {
-        Collection::Ok(tokens) => {
-            for token in tokens {
-                println!("{:?}", token);
-            }
-
-            // let fields = parse_env(tokens);
-            //
-            // println!("{:?}", fields);
-        }
-
-        Collection::Failed(errors) => {
-            for error in errors {
-                println!("{:?}", error);
-            }
-        }
+    
+    for fragment in fragments {
+        println!("{:?}", fragment);
     }
+    // let tokens = tokenize(fragments);
+    // 
+    // 
+    // match tokens {
+    //     Collection::Ok(tokens) => {
+    //         for token in tokens {
+    //             println!("{:?}", token);
+    //         }
+    // 
+    //         // let fields = parse_env(tokens);
+    //         //
+    //         // println!("{:?}", fields);
+    //     }
+    // 
+    //     Collection::Failed(errors) => {
+    //         for error in errors {
+    //             println!("{:?}", error);
+    //         }
+    //     }
+    // }
 
 
 
