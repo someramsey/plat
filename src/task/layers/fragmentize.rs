@@ -20,11 +20,11 @@ pub struct Fragment<'a> {
 struct Cursor<'a> {
     data: &'a str,
     head: usize,
-    tail: usize
+    tail: usize,
 }
 
-impl Cursor<'_> {
-    fn new(data: &str) -> Cursor {
+impl<'a> Cursor<'a> {
+    fn new(data: &'a str) -> Cursor {
         Cursor {
             data,
             head: 0,
@@ -41,8 +41,8 @@ impl Cursor<'_> {
         self.head += 1;
     }
 
-    fn collect(&mut self) -> &str {
-        let slice =  &self.data[self.tail..self.head];
+    fn collect(&mut self) -> &'a str {
+        let slice = &self.data[self.tail..self.head];
         self.tail = self.head;
 
         return slice;
@@ -52,27 +52,18 @@ impl Cursor<'_> {
 struct Iteration<'a> {
     iterator: Chars<'a>,
     position: Position,
-    current: Option<char>,
-    moved: bool,
+    current: Option<char>
 }
 
 impl Iteration<'_> {
     fn new(data: &str) -> Iteration {
+        let mut iterator = data.chars();
+        let current = iterator.next();
+
         Iteration {
-            iterator: data.chars(),
+            iterator, current,
             position: Position::new(),
-            current: None,
-            moved: false,
         }
-    }
-
-    fn peek(&mut self) -> Option<char> {
-        if !self.moved {
-            self.current = self.iterator.next();
-            self.moved = true;
-        }
-
-        self.current
     }
 
     fn next(&mut self) {
@@ -91,17 +82,28 @@ impl Iteration<'_> {
     }
 }
 
+struct A<'a> {
+    fragments: Vec<Fragment<'a>>,
+    iteration: Iteration<'a>,
+    cursor: Cursor<'a>,
+}
+
+
 pub fn fragmentize(data: &str) -> Vec<Fragment> {
     let mut fragments: Vec<Fragment> = Vec::new();
 
     let mut iteration = Iteration::new(data);
     let mut cursor = Cursor::new(data);
 
-    while let Some(ch) = iteration.peek() {
+    while let Some(ch) = iteration.current {
         if ch.is_numeric() {
-            while let Some(ch) = iteration.peek() {
+            while let Some(ch) = iteration.current {
                 if !ch.is_numeric() {
-                    println!("{:?}", cursor.collect());
+                    fragments.push(Fragment {
+                        data: FragmentData::Numeric(cursor.collect()),
+                        position: iteration.position.clone(),
+                    });
+
                     break;
                 }
 
@@ -109,9 +111,13 @@ pub fn fragmentize(data: &str) -> Vec<Fragment> {
                 iteration.advance(ch);
             }
         } else if ch.is_alphanumeric() {
-            while let Some(ch) = iteration.peek() {
+            while let Some(ch) = iteration.current {
                 if !ch.is_alphanumeric() {
-                    println!("Alphanumric: {}", cursor.collect());
+                    fragments.push(Fragment {
+                        data: FragmentData::AlphaNumeric(cursor.collect()),
+                        position: iteration.position.clone(),
+                    });
+
                     break;
                 }
 
@@ -120,7 +126,10 @@ pub fn fragmentize(data: &str) -> Vec<Fragment> {
             }
         } else {
             if !ch.is_whitespace() {
-                println!("Symbol: {:?}", ch);
+                fragments.push(Fragment {
+                    data: FragmentData::Symbol(ch),
+                    position: iteration.position.clone(),
+                });
             }
 
             cursor.skip();
