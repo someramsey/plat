@@ -3,18 +3,13 @@ use crate::task::layers::tokenize::Token;
 use crate::task::position::Position;
 use std::str::Chars;
 use std::vec::IntoIter;
+use crate::task::node::Node;
 
 #[derive(Debug)]
-pub enum FragmentData<'a> {
+pub enum Fragment<'a> {
     AlphaNumeric(&'a str),
     Numeric(&'a str),
     Symbol(char),
-}
-
-#[derive(Debug)]
-pub struct Fragment<'a> {
-    pub data: FragmentData<'a>,
-    pub position: Position,
 }
 
 struct Cursor<'a> {
@@ -89,8 +84,8 @@ struct A<'a> {
 }
 
 
-pub fn fragmentize(data: &str) -> Vec<Fragment> {
-    let mut fragments: Vec<Fragment> = Vec::new();
+pub fn fragmentize(data: &str) -> Vec<Node<Fragment>> {
+    let mut fragments: Vec<Node<Fragment>> = Vec::new();
 
     let mut iteration = Iteration::new(data);
     let mut cursor = Cursor::new(data);
@@ -99,11 +94,11 @@ pub fn fragmentize(data: &str) -> Vec<Fragment> {
         if ch.is_numeric() {
             while let Some(ch) = iteration.current {
                 if !ch.is_numeric() {
-                    fragments.push(Fragment {
-                        data: FragmentData::Numeric(cursor.collect()),
-                        position: iteration.position.clone(),
-                    });
-
+                    fragments.push(Node::new(
+                        Fragment::Numeric(cursor.collect()),
+                        iteration.position.clone(),
+                    ));
+                    
                     break;
                 }
 
@@ -113,10 +108,10 @@ pub fn fragmentize(data: &str) -> Vec<Fragment> {
         } else if ch.is_alphanumeric() {
             while let Some(ch) = iteration.current {
                 if !ch.is_alphanumeric() {
-                    fragments.push(Fragment {
-                        data: FragmentData::AlphaNumeric(cursor.collect()),
-                        position: iteration.position.clone(),
-                    });
+                    fragments.push(Node::new(
+                        Fragment::AlphaNumeric(cursor.collect()),
+                        iteration.position.clone(),
+                    ));
 
                     break;
                 }
@@ -126,10 +121,10 @@ pub fn fragmentize(data: &str) -> Vec<Fragment> {
             }
         } else {
             if !ch.is_whitespace() {
-                fragments.push(Fragment {
-                    data: FragmentData::Symbol(ch),
-                    position: iteration.position.clone(),
-                });
+                fragments.push(Node::new(
+                    Fragment::Symbol(ch),
+                    iteration.position.clone(),
+                ));
             }
 
             cursor.skip();

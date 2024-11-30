@@ -1,9 +1,10 @@
 use crate::task::collection::Collection;
 use crate::task::data::str_expr::StrExpression;
-use crate::task::layers::parsers::context::{Node, ParseContext};
+use crate::task::layers::parsers::context::ParseContext;
 use crate::task::layers::tokenize::{Token, TokenData};
 use crate::task::position::Position;
 use std::sync::Arc;
+use crate::task::node::Node;
 
 #[derive(Debug)]
 pub enum Instruction {

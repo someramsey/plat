@@ -4,7 +4,7 @@ use crate::task::layers::parsers::parse_script::Instruction;
 use crate::task::position::Position;
 use glob::glob;
 use std::{fs, net};
-use crate::task::layers::parsers::context::Node;
+use crate::task::node::Node;
 
 pub fn evaluate(nodes: Vec<Node<Instruction>>) -> Option<Vec<Error>> {
     let mut errors: Vec<Error> = Vec::new();

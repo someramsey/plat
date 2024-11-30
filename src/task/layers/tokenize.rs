@@ -5,10 +5,11 @@ use crate::task::data::num::Num;
 use crate::task::data::str::{ch_to_str, concat_str, Str};
 use crate::task::data::str_expr::{StrExpression, StrExpressionItem};
 use crate::task::error::Error;
-use crate::task::layers::fragmentize::{Fragment, FragmentData};
+use crate::task::layers::fragmentize::{Fragment, Fragment};
 use crate::task::position::Position;
 use std::sync::Arc;
 use std::vec::IntoIter;
+use crate::task::node::Node;
 
 #[derive(Debug)]
 pub enum TokenData {
@@ -41,40 +42,73 @@ pub struct Token {
     pub position: Position,
 }
 
-pub fn tokenize(fragments: Vec<Fragment>) -> Collection<Token> {
+
+struct TokenizationContext<'a> {
+    collection: Collection<Token>,
+    iterator: Peekable<IntoIter<Fragment<'a>>>
+}
+
+impl TokenizationContext<'_> {
+    fn new(iterator: Peekable<IntoIter<Fragment>>) -> TokenizationContext {
+        TokenizationContext { iterator, collection: Collection::new() }
+    }
+
+    fn next(&mut self) -> Option<Fragment> {
+        return self.iterator.next();
+    }
+
+    fn peek(&mut self) -> Option<&Fragment> {
+        return self.iterator.peek();
+    }
+
+    fn push(&mut self, data: Token) {
+        self.collection.push(token);
+    }
+}
+
+
+pub fn tokenize(fragments: Vec<Node<Fragment>>) -> Collection<Token> {
     let mut collection: Collection<Token> = Collection::new();
     let mut iter = fragments.into_iter().peekable();
+    
+    fragments.iter()
 
     while let Some(fragment) = iter.peek() {
         match fragment.data {
-
-            FragmentData::Numeric(_) => {}
-            FragmentData::Symbol(ch) => match ch {
+            Fragment::Numeric(_) => {}
+            Fragment::Symbol(ch) => match ch {
                 '"' => capture_string(&mut iter, &mut collection),
                 '/' => capture_regex(&mut iter, &mut collection),
                 '$' => capture_variable(&mut iter, &mut collection),
-                _ => {}
+                _ => {
+                    collection.push(Token {
+                        data: TokenData::Symbol(ch),
+                        position: fragment.position.clone(),
+                    });
+                }
             }
 
-            FragmentData::AlphaNumeric(str) => {
+            Fragment::AlphaNumeric(str) => {
                 collection.push(Token {
                     data: TokenData::Segment(Arc::from(str)),
                     position: fragment.position.clone(),
                 });
-            },
+            }
         }
     }
 
     return collection;
 }
 
-fn capture_variable(iter: &mut Peekable<IntoIter<Fragment>>, collection: &mut Collection<Token>) {
+fn capture_variable(iter: &mut Peekable<IntoIter<Node<Fragment>>>, collection: &mut Collection<Token>) {
+    iter.next();
+
     let identifier = match iter.next() {
         Some(next) => next,
         None => {
             collection.throw(Error {
                 message: str!("Unexpected EOF while capturing variable"),
-                position: last.clone(),
+                position: Position::new(),
             });
 
             return;
@@ -82,7 +116,7 @@ fn capture_variable(iter: &mut Peekable<IntoIter<Fragment>>, collection: &mut Co
     };
 
     match identifier {
-        Fragment { data: FragmentData::AlphaNumeric(slice), position } => {
+        Fragment { data: Fragment::AlphaNumeric(slice), position } => {
             collection.push(Token {
                 data: TokenData::Variable(Arc::from(slice)),
                 position: position.clone(),
@@ -98,16 +132,16 @@ fn capture_variable(iter: &mut Peekable<IntoIter<Fragment>>, collection: &mut Co
     }
 }
 
-fn capture_regex(iter: &mut Peekable<IntoIter<Fragment>>, collection: &mut Collection<Token>) {
+fn capture_regex(iter: &mut Peekable<IntoIter<Node<Fragment>>>, collection: &mut Collection<Token>) {
     let mut parts: Vec<Str> = Vec::new();
 
     while let Some(fragment) = iter.next() {
         match fragment.data {
-            FragmentData::Symbol('\\') => {
+            Fragment::Symbol('\\') => {
                 iter.next();
             }
 
-            FragmentData::Symbol('/') => {
+            Fragment::Symbol('/') => {
                 collection.push(Token {
                     data: TokenData::Regex(concat_str(parts)),
                     position: fragment.position.clone(),
@@ -116,10 +150,10 @@ fn capture_regex(iter: &mut Peekable<IntoIter<Fragment>>, collection: &mut Colle
                 return;
             }
 
-            FragmentData::Numeric(slice) |
-            FragmentData::AlphaNumeric(slice) => parts.push(Arc::from(slice)),
+            Fragment::Numeric(slice) |
+            Fragment::AlphaNumeric(slice) => parts.push(Arc::from(slice)),
 
-            FragmentData::Symbol(ch) => parts.push(ch_to_str(ch)),
+            Fragment::Symbol(ch) => parts.push(ch_to_str(ch)),
         }
     }
 
@@ -129,49 +163,52 @@ fn capture_regex(iter: &mut Peekable<IntoIter<Fragment>>, collection: &mut Colle
     });
 }
 
-fn capture_string(iter: &mut Peekable<IntoIter<Fragment>>, collection: &mut Collection<Token>) {
+fn capture_string(iter: &mut Peekable<IntoIter<Node<Fragment>>>, collection: &mut Collection<Token>) {
     let mut expr = StrExpression::new();
 
     iter.next();
 
     while let Some(fragment) = iter.next() {
         match fragment.data {
-            FragmentData::Symbol('\\') => {
-                iter.next();
-            }
+            Fragment::Symbol(ch) => {
+                match ch {
+                    '\\' => {
+                        iter.next();
+                    }
 
-            FragmentData::Symbol('"') => {
-                collection.push(Token {
-                    data: TokenData::String(expr),
-                    position: fragment.position.clone(),
-                });
-
-                return;
-            }
-
-            FragmentData::Symbol('$') => {
-                if let Some(next) = iter.next() {
-                    if let FragmentData::AlphaNumeric(slice) = next.data {
-                        expr.push(StrExpressionItem::Variable(Arc::from(slice)));
-                    } else {
-                        collection.throw(Error {
-                            message: str!("Expected variable identifier after '$'"),
-                            position: next.position.clone(),
+                    '"' => {
+                        collection.push(Token {
+                            data: TokenData::String(expr),
+                            position: fragment.position.clone(),
                         });
+
+                        return;
+                    }
+
+                    '$' => {
+                        if let Some(next) = iter.next() {
+                            if let Fragment::AlphaNumeric(slice) = next.data {
+                                expr.push(StrExpressionItem::Variable(Arc::from(slice)));
+                            } else {
+                                collection.throw(Error {
+                                    message: str!("Expected variable identifier after '$'"),
+                                    position: next.position.clone(),
+                                });
+                            }
+                        }
+                    }
+
+                    _ => {
+                        expr.push(StrExpressionItem::Literal(ch_to_str(ch)));
                     }
                 }
             }
 
-            FragmentData::Symbol(ch) =>
-                expr.push(StrExpressionItem::Literal(Arc::from(ch.to_string()))),
-
-            FragmentData::Numeric(slice) |
-            FragmentData::AlphaNumeric(slice) =>
+            Fragment::Numeric(slice) |
+            Fragment::AlphaNumeric(slice) =>
                 expr.push(StrExpressionItem::Literal(Arc::from(slice))),
         }
     }
-
-
 }
 
 

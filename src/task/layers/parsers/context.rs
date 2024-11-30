@@ -1,21 +1,16 @@
 use crate::str;
 use crate::task::collection::Collection;
-use crate::task::error::Error;
-use crate::task::position::Position;
-use crate::task::layers::tokenize::{Token, TokenData};
-use std::sync::Arc;
-use std::vec::IntoIter;
 use crate::task::data::str::Str;
 use crate::task::data::str_expr::StrExpression;
-
-#[derive(Debug)]
-pub struct Node<T> {
-    pub data: T,
-    pub position: Position,
-}
+use crate::task::error::Error;
+use crate::task::layers::tokenize::{Token, TokenData};
+use crate::task::node::Node;
+use crate::task::position::Position;
+use std::sync::Arc;
+use std::vec::IntoIter;
 
 pub enum ParseState {
-    Waiting,
+    Idle,
     Working(Position),
     Done,
 }
@@ -30,7 +25,7 @@ impl<T> ParseContext<T> {
     pub fn new(iterator: IntoIter<Token>) -> ParseContext<T> {
         ParseContext::<T> {
             iterator,
-            state: ParseState::Waiting,
+            state: ParseState::Idle,
             collection: Collection::<Node<T>>::new(),
         }
     }

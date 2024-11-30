@@ -1,8 +1,9 @@
 use crate::task::collection::Collection;
-use crate::task::layers::parsers::context::{Node, ParseContext};
+use crate::task::layers::parsers::context::ParseContext;
 use crate::task::data::str::Str;
 use crate::task::data::str_expr::StrExpression;
 use crate::task::layers::tokenize::Token;
+use crate::task::node::Node;
 
 #[derive(Debug)]
 pub enum Validator {
