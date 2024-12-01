@@ -16,18 +16,14 @@ impl<T> Node<T> {
 
 pub struct NodeIter<'a, T> {
     data: Iter<'a, Node<T>>,
-    current: Option<&'a Node<T>>,
-    position: Position,
-    done: bool
+    pub position: Position,
+    pub done: bool,
+    pub current: Option<&'a Node<T>>,
 }
 
 impl<'a, T> NodeIter<'a, T> {
     pub fn new(data: &'a Vec<Node<T>>) -> NodeIter<'a, T> {
         NodeIter { data: data.into_iter(), position: Position::new(), current: None, done: false }
-    }
-
-    pub fn peek(&self) -> Option<&Node<T>> {
-        return self.current;
     }
 
     pub fn next(&mut self) -> Option<&Node<T>> {

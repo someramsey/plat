@@ -5,11 +5,11 @@ use crate::task::data::num::Num;
 use crate::task::data::str::{ch_to_str, concat_str, Str};
 use crate::task::data::str_expr::{StrExpression, StrExpressionItem};
 use crate::task::error::Error;
-use crate::task::layers::fragmentize::{Fragment, Fragment};
+use crate::task::layers::fragmentize::{Fragment};
 use crate::task::position::Position;
 use std::sync::Arc;
 use std::vec::IntoIter;
-use crate::task::node::Node;
+use crate::task::node::{Node, NodeIter};
 
 #[derive(Debug)]
 pub enum TokenData {
@@ -45,7 +45,7 @@ pub struct Token {
 
 struct TokenizationContext<'a> {
     collection: Collection<Token>,
-    iterator: Peekable<IntoIter<Fragment<'a>>>
+    iterator: Peekable<IntoIter<Fragment<'a>>>,
 }
 
 impl TokenizationContext<'_> {
@@ -69,11 +69,9 @@ impl TokenizationContext<'_> {
 
 pub fn tokenize(fragments: Vec<Node<Fragment>>) -> Collection<Token> {
     let mut collection: Collection<Token> = Collection::new();
-    let mut iter = fragments.into_iter().peekable();
-    
-    fragments.iter()
+    let mut iter = NodeIter::new(&fragments);
 
-    while let Some(fragment) = iter.peek() {
+    while let Some(fragment) = iter.next() {
         match fragment.data {
             Fragment::Numeric(_) => {}
             Fragment::Symbol(ch) => match ch {
@@ -99,76 +97,102 @@ pub fn tokenize(fragments: Vec<Node<Fragment>>) -> Collection<Token> {
 
     return collection;
 }
+//
+// fn capture_variable(iter: &mut NodeIter<Fragment>, collection: &mut Collection<Token>) {
+//     iter.next();
+//
+//     let identifier = match iter.next() {
+//         Some(next) => next,
+//         None => {
+//             collection.throw(Error {
+//                 message: str!("Unexpected EOF while capturing variable"),
+//                 position: Position::new(),
+//             });
+//
+//             return;
+//         }
+//     };
+//
+//     match identifier {
+//         Fragment { data: Fragment::AlphaNumeric(slice), position } => {
+//             collection.push(Token {
+//                 data: TokenData::Variable(Arc::from(slice)),
+//                 position: position.clone(),
+//             });
+//         }
+//
+//         _ => {
+//             collection.throw(Error {
+//                 message: str!("Expected variable identifier after '$'"),
+//                 position: identifier.position.clone(),
+//             });
+//         }
+//     }
+// }
 
-fn capture_variable(iter: &mut Peekable<IntoIter<Node<Fragment>>>, collection: &mut Collection<Token>) {
-    iter.next();
+//
+// fn capture_regex(iter: &mut NodeIter<Fragment>, collection: &mut Collection<Token>) {
+//     let mut parts: Vec<Str> = Vec::new();
+//
+//     while let Some(fragment) = iter.next() {
+//         match fragment.data {
+//             Fragment::Symbol('\\') => {
+//                 iter.next();
+//             }
+//
+//             Fragment::Symbol('/') => {
+//                 collection.push(Token {
+//                     data: TokenData::Regex(concat_str(parts)),
+//                     position: fragment.position.clone(),
+//                 });
+//
+//                 return;
+//             }
+//
+//             Fragment::Numeric(slice) |
+//             Fragment::AlphaNumeric(slice) => parts.push(Arc::from(slice)),
+//
+//             Fragment::Symbol(ch) => parts.push(ch_to_str(ch)),
+//         }
+//     }
+//
+//     collection.throw(Error {
+//         message: str!("Unexpected EOF while capturing regex"),
+//         position: Position::new(),
+//     });
+// }
 
-    let identifier = match iter.next() {
-        Some(next) => next,
-        None => {
-            collection.throw(Error {
-                message: str!("Unexpected EOF while capturing variable"),
-                position: Position::new(),
-            });
+macro_rules! expect {
+    ($iter:expr, $collection: expr, $pat:pat => $binding:ident) => {{
+        let iter: &mut NodeIter<Fragment> = $iter;
+        let collection: &mut Collection<Token> = $collection;
 
-            return;
-        }
-    };
-
-    match identifier {
-        Fragment { data: Fragment::AlphaNumeric(slice), position } => {
-            collection.push(Token {
-                data: TokenData::Variable(Arc::from(slice)),
-                position: position.clone(),
-            });
-        }
-
-        _ => {
-            collection.throw(Error {
-                message: str!("Expected variable identifier after '$'"),
-                position: identifier.position.clone(),
-            });
-        }
-    }
-}
-
-fn capture_regex(iter: &mut Peekable<IntoIter<Node<Fragment>>>, collection: &mut Collection<Token>) {
-    let mut parts: Vec<Str> = Vec::new();
-
-    while let Some(fragment) = iter.next() {
-        match fragment.data {
-            Fragment::Symbol('\\') => {
-                iter.next();
-            }
-
-            Fragment::Symbol('/') => {
-                collection.push(Token {
-                    data: TokenData::Regex(concat_str(parts)),
-                    position: fragment.position.clone(),
+        if let Some(next) = $iter.next() {
+            if let $pat = next.data {
+                Some($binding)
+            } else {
+                collection.throw(Error {
+                    message: str!("Unexpected fragment"),
+                    position: next.position.clone(),
                 });
-
-                return;
+                None
             }
-
-            Fragment::Numeric(slice) |
-            Fragment::AlphaNumeric(slice) => parts.push(Arc::from(slice)),
-
-            Fragment::Symbol(ch) => parts.push(ch_to_str(ch)),
+        } else {
+            collection.throw(Error {
+                message: str!("Unexpected EOF"),
+                position: iter.position.clone(),
+            });
+            None
         }
-    }
-
-    collection.throw(Error {
-        message: str!("Unexpected EOF while capturing regex"),
-        position: Position::new(),
-    });
+    }};
 }
 
-fn capture_string(iter: &mut Peekable<IntoIter<Node<Fragment>>>, collection: &mut Collection<Token>) {
+//TODO: use the macro to remove repetition on checking
+//TODO: reimplement number capturing
+fn capture_string(iter: &mut NodeIter<Fragment>, collection: &mut Collection<Token>) {
     let mut expr = StrExpression::new();
 
-    iter.next();
-
-    while let Some(fragment) = iter.next() {
+    while let Some(fragment) = iter.current {
         match fragment.data {
             Fragment::Symbol(ch) => {
                 match ch {
@@ -186,16 +210,11 @@ fn capture_string(iter: &mut Peekable<IntoIter<Node<Fragment>>>, collection: &mu
                     }
 
                     '$' => {
-                        if let Some(next) = iter.next() {
-                            if let Fragment::AlphaNumeric(slice) = next.data {
-                                expr.push(StrExpressionItem::Variable(Arc::from(slice)));
-                            } else {
-                                collection.throw(Error {
-                                    message: str!("Expected variable identifier after '$'"),
-                                    position: next.position.clone(),
-                                });
-                            }
-                        }
+                        // if let Some(slice) = expect!(iter, collection, Fragment::AlphaNumeric(x) => x) {
+                        //     expr.push(StrExpressionItem::Variable(Arc::from(slice)));
+                        // } else {
+                        //     return;
+                        // }
                     }
 
                     _ => {
@@ -210,27 +229,5 @@ fn capture_string(iter: &mut Peekable<IntoIter<Node<Fragment>>>, collection: &mu
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
