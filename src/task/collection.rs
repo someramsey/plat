@@ -1,5 +1,4 @@
 use crate::task::error::Error;
-use crate::task::layers::tokenize::Token;
 
 #[derive(Debug)]
 pub enum Collection<T> {

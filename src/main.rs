@@ -3,18 +3,16 @@
 
 mod task;
 
-use task::layers::fragmentize::fragmentize;
+use crate::task::layers::fragmentize::Fragment;
 use clap::{Arg, Command};
 use indicatif::ProgressBar;
+use std::any::{type_name, Any};
 use std::collections::HashMap;
 use std::env;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Seek, Write};
 use std::path::PathBuf;
-use task::layers::tokenize::tokenize;
-use crate::task::collection::Collection;
-use crate::task::layers::parsers::parse_env::parse_env;
-use crate::task::layers::parsers::parse_script::parse_instructions;
+use task::layers::fragmentize::fragmentize;
 
 fn open_data_file() -> File {
     let path = env::current_exe()

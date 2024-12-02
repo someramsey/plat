@@ -1,7 +1,7 @@
 use crate::task::collection::Collection;
 use crate::task::data::str_expr::StrExpression;
 use crate::task::layers::parsers::context::ParseContext;
-use crate::task::layers::tokenize::{Token, TokenData};
+use crate::task::layers::tokenize::{Token, Token};
 use crate::task::position::Position;
 use std::sync::Arc;
 use crate::task::node::Node;
@@ -38,7 +38,7 @@ pub fn parse_instructions(data: Vec<Token>) -> Collection<Node<Instruction>> {
     let mut context = ParseContext::new(iterator);
 
     while !context.is_done() {
-        if let Some(Token { data: TokenData::Segment(arc), position, }) = context.next() {
+        if let Some(Token { data: Token::Segment(arc), position, }) = context.next() {
             begin_chain(&mut context, Vec::new(), &arc, position);
         }
     }
@@ -63,8 +63,8 @@ fn begin_scope(context: &mut ParseContext<Instruction>, chain: Vec<Modifier>) {
     while !context.is_done() {
         if let Some(Token { data, position }) = context.next() {
             match data {
-                TokenData::Symbol('}') => break,
-                TokenData::Segment(str) => {
+                Token::Symbol('}') => break,
+                Token::Segment(str) => {
                     begin_chain(context, chain.clone(), str.as_ref(), position)
                 }
                 _ => context.throw_at(Arc::from("Expected command or '}'"), position),
@@ -108,8 +108,8 @@ fn copy_command(context: &mut ParseContext<Instruction>, chain: Vec<Modifier>) {
 
     while let Some(Token { data, position }) = context.next() {
         match data {
-            TokenData::Symbol(';') => break,
-            TokenData::Segment(str) => match str.as_ref() {
+            Token::Symbol(';') => break,
+            Token::Segment(str) => match str.as_ref() {
                 "at" => {
                     if !read_string(context, &mut origin) {
                         break;

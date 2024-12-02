@@ -1,11 +1,8 @@
-use std::iter::Peekable;
-use crate::task::layers::tokenize::Token;
+use crate::task::node::Node;
 use crate::task::position::Position;
 use std::str::Chars;
-use std::vec::IntoIter;
-use crate::task::node::Node;
 
-#[derive(Debug)]
+#[derive(Debug,)]
 pub enum Fragment<'a> {
     AlphaNumeric(&'a str),
     Numeric(&'a str),
@@ -16,6 +13,12 @@ struct Cursor<'a> {
     data: &'a str,
     head: usize,
     tail: usize,
+}
+
+struct Iteration<'a> {
+    iterator: Chars<'a>,
+    position: Position,
+    current: Option<char>
 }
 
 impl<'a> Cursor<'a> {
@@ -44,12 +47,6 @@ impl<'a> Cursor<'a> {
     }
 }
 
-struct Iteration<'a> {
-    iterator: Chars<'a>,
-    position: Position,
-    current: Option<char>
-}
-
 impl Iteration<'_> {
     fn new(data: &str) -> Iteration {
         let mut iterator = data.chars();
@@ -76,13 +73,6 @@ impl Iteration<'_> {
         }
     }
 }
-
-struct A<'a> {
-    fragments: Vec<Fragment<'a>>,
-    iteration: Iteration<'a>,
-    cursor: Cursor<'a>,
-}
-
 
 pub fn fragmentize(data: &str) -> Vec<Node<Fragment>> {
     let mut fragments: Vec<Node<Fragment>> = Vec::new();

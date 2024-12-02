@@ -3,7 +3,7 @@ use crate::task::collection::Collection;
 use crate::task::data::str::Str;
 use crate::task::data::str_expr::StrExpression;
 use crate::task::error::Error;
-use crate::task::layers::tokenize::{Token, TokenData};
+use crate::task::layers::tokenize::{Token, Token};
 use crate::task::node::Node;
 use crate::task::position::Position;
 use std::sync::Arc;
@@ -62,7 +62,7 @@ impl<T> ParseContext<T> {
     pub fn expect_symbol(&mut self, symbol: char) -> bool {
         if let Some(Token { data, position }) = self.next() {
             match data {
-                TokenData::Symbol(ch) if ch == symbol => return true,
+                Token::Symbol(ch) if ch == symbol => return true,
 
                 _ => {
                     let kind = data.stringify();
@@ -82,7 +82,7 @@ impl<T> ParseContext<T> {
     pub fn expect_segment(&mut self, segment: &str) -> bool {
         if let Some(Token { data, position }) = self.next() {
             match data {
-                TokenData::Segment(arc) if arc.as_ref() == segment => return true,
+                Token::Segment(arc) if arc.as_ref() == segment => return true,
 
                 _ => {
                     let kind = data.stringify();
@@ -102,7 +102,7 @@ impl<T> ParseContext<T> {
     pub fn read_segment(&mut self) -> Option<Str> {
         if let Some(Token { data, position }) = self.next() {
             match data {
-                TokenData::Segment(str) => return Some(str),
+                Token::Segment(str) => return Some(str),
 
                 _ => {
                     let kind = data.stringify();
@@ -122,7 +122,7 @@ impl<T> ParseContext<T> {
     pub fn read_string(&mut self) -> Option<StrExpression> {
         if let Some(Token { data, position }) = self.next() {
             match data {
-                TokenData::String(str) => return Some(str),
+                Token::String(str) => return Some(str),
 
                 _ => {
                     let kind = data.stringify();
