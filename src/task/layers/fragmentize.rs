@@ -2,7 +2,7 @@ use crate::task::node::Node;
 use crate::task::position::Position;
 use std::str::Chars;
 
-#[derive(Debug,)]
+#[derive(Debug)]
 pub enum Fragment<'a> {
     AlphaNumeric(&'a str),
     Numeric(&'a str),
@@ -84,31 +84,31 @@ pub fn fragmentize(data: &str) -> Vec<Node<Fragment>> {
         if ch.is_numeric() {
             while let Some(ch) = iteration.current {
                 if !ch.is_numeric() {
-                    fragments.push(Node::new(
-                        Fragment::Numeric(cursor.collect()),
-                        iteration.position.clone(),
-                    ));
-                    
                     break;
                 }
 
                 cursor.take();
                 iteration.advance(ch);
             }
+            
+            fragments.push(Node::new(
+                Fragment::Numeric(cursor.collect()),
+                iteration.position.clone(),
+            ));
         } else if ch.is_alphanumeric() {
             while let Some(ch) = iteration.current {
                 if !ch.is_alphanumeric() {
-                    fragments.push(Node::new(
-                        Fragment::AlphaNumeric(cursor.collect()),
-                        iteration.position.clone(),
-                    ));
-
                     break;
                 }
 
                 cursor.take();
                 iteration.advance(ch);
             }
+            
+            fragments.push(Node::new(
+                Fragment::AlphaNumeric(cursor.collect()),
+                iteration.position.clone(),
+            ));
         } else {
             if !ch.is_whitespace() {
                 fragments.push(Node::new(
