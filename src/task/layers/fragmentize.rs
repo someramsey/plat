@@ -1,4 +1,4 @@
-use crate::task::node::Node;
+use crate::task::nodes::node::Node;
 use crate::task::position::Position;
 use std::str::Chars;
 
@@ -90,7 +90,7 @@ pub fn fragmentize(data: &str) -> Vec<Node<Fragment>> {
                 cursor.take();
                 iteration.advance(ch);
             }
-            
+
             fragments.push(Node::new(
                 Fragment::Numeric(cursor.collect()),
                 iteration.position.clone(),
@@ -104,7 +104,7 @@ pub fn fragmentize(data: &str) -> Vec<Node<Fragment>> {
                 cursor.take();
                 iteration.advance(ch);
             }
-            
+
             fragments.push(Node::new(
                 Fragment::AlphaNumeric(cursor.collect()),
                 iteration.position.clone(),

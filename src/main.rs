@@ -3,16 +3,16 @@
 
 mod task;
 
-use crate::task::layers::fragmentize::Fragment;
 use clap::{Arg, Command};
 use indicatif::ProgressBar;
-use std::any::{type_name, Any};
+use std::any::Any;
 use std::collections::HashMap;
 use std::env;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Seek, Write};
 use std::path::PathBuf;
-use task::layers::fragmentize::fragmentize;
+use crate::task::layers::fragmentize::fragmentize;
+use crate::task::layers::tokenize::tokenize;
 
 fn open_data_file() -> File {
     let path = env::current_exe()
@@ -80,20 +80,23 @@ fn load(origin: PathBuf, target: PathBuf, progress_bar: ProgressBar) {
 }
 
 fn main() {
-    let file = File::open("src/.platenv").unwrap();
+    let file = File::open("src/test").unwrap();
     let mut reader = BufReader::new(&file);
 
     let mut data = String::new();
     reader.read_to_string(&mut data).unwrap();
 
-    //TODO: reimplement fragmentize and fix tokenizer based off it
 
     let fragments = fragmentize(&data);
-    
-    for fragment in fragments {
-        println!("{:?}", fragment);
-    }
-    // let tokens = tokenize(fragments);
+
+    // for fragment in fragments {
+    //     println!("{:?}", fragment);
+    // }
+
+    tokenize(fragments);
+
+
+
     // 
     // 
     // match tokens {

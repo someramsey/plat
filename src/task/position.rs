@@ -1,7 +1,14 @@
-#[derive(Debug)]
+use std::fmt::{Debug, Formatter};
+
 pub struct Position {
     pub line: i32,
     pub column: i32,
+}
+
+impl Debug for Position {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}:{})", self.line, self.column)
+    }
 }
 
 impl Clone for Position {
