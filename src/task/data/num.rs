@@ -2,16 +2,16 @@ use std::sync::Arc;
 use crate::task::data::str::Str;
 
 #[derive(Debug)]
-pub enum Num {
+pub enum Number {
     Integer(i32),
     Decimal(f32),
 }
 
-impl Num {
+impl Number {
     pub fn stringify(&self) -> Str {
         match self {
-            Num::Integer(n) => Arc::from(n.to_string()),
-            Num::Decimal(n) => Arc::from(n.to_string()),
+            Number::Integer(n) => Arc::from(n.to_string()),
+            Number::Decimal(n) => Arc::from(n.to_string()),
         }
     }
 }

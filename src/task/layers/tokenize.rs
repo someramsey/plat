@@ -1,11 +1,15 @@
-use crate::nodes;
-use crate::task::data::num::Num;
+use std::slice::Iter;
+use crate::{node, nodes};
+use crate::task::data::num::Number;
 use crate::task::data::str::Str;
 use crate::task::data::str_expr::StrExpression;
 use crate::task::layers::fragmentize::Fragment;
 use crate::task::nodes::iterator::NodeIter;
 use crate::task::nodes::node::Node;
 use std::sync::Arc;
+use peekmore::{PeekMore, PeekMoreIterator};
+use crate::task::error::{Error, ErrorCause};
+use crate::task::position::Position;
 
 #[derive(Debug)]
 pub enum Token {
@@ -13,8 +17,8 @@ pub enum Token {
     Variable(Str),
     Symbol(char),
     String(StrExpression),
-    Number(Num),
     Regex(Str),
+    Numeric(Number),
     Range(i32, i32),
 }
 
@@ -23,7 +27,7 @@ impl Token {
         match self {
             Token::Segment(str) => str.clone(),
             Token::Symbol(ch) => Arc::from(format!("symbol '{}'", ch)),
-            Token::Number(num) => num.stringify(),
+            Token::Numeric(num) => num.stringify(),
             Token::String(str) => Arc::from("string"),
             Token::Regex(str) => Arc::from(format!("regex (\"{}\")", str)),
             Token::Variable(str) => Arc::from(format!("${}", str)),
@@ -32,11 +36,12 @@ impl Token {
     }
 }
 
-pub fn tokenize(fragments: Vec<Node<Fragment>>) {
-    let mut iter = NodeIter::new(fragments);
 
-    while let Some(fragment) = iter.next() {
-        match fragment.data {
+pub fn tokenize(fragments: Vec<Node<Fragment>>) {
+    let mut iter: NodeIter<Fragment> = fragments.iter().peekmore();
+
+    while let Some(node) = iter.next() {
+        match node.data {
             Fragment::Symbol(ch) => match ch {
                 '"' => {
                     println!("String: ");
@@ -59,31 +64,54 @@ pub fn tokenize(fragments: Vec<Node<Fragment>>) {
                 println!("AlphaNumeric: {}", str);
             }
 
-            Fragment::Numeric(base) => match iter.peek_slice(3) {
-                Some(nodes!(Fragment::Symbol('.'), Fragment::Symbol('.'), rest)) => {
-                    if let Fragment::Numeric(end) = rest {
-                        println!("Integer-Integer Range: {}..{}", base, end);
-                    } else {
-                        println!("invalid");
-                    }
+            Fragment::Numeric(base) => {
+                dw(&mut iter, base);
+            }
+        }
+    }
+}
 
-                    iter.skip(3);
-                }
 
-                Some(nodes!(Fragment::Symbol('.'), rest)) => {
-                    if let Fragment::Numeric(frac) = rest {
-                        println!("Decimal: {}.{}", base, frac);
-                    } else {
-                        println!("invalid");
-                    }
+fn dw(iter: &mut NodeIter<Fragment>, base: &str) {
+    match iter.peek_amount(2) {
+        nodes!(Fragment::Symbol('.'), Fragment::Symbol('.')) => {
+            iter.skip(2);
 
-                    iter.skip(2);
-                }
+            if let node!(Fragment::Numeric(end), position) = iter.peek() {
+                iter.skip(1);
 
-                Some(_) | None => {
-                    println!("Integer: {}", base);
-                }
-            },
+                let start = base.parse::<i32>()
+                    .map_err(|_| Error::new("Failed to parse range start", position.clone(), ErrorCause::InternalError))?;
+
+                let end = end.parse::<i32>()
+                    .map_err(|_| Error::new("Failed to parse range end", position.clone(), ErrorCause::InternalError))?;
+
+                println!("{:?}", Token::Range(start, end));
+            } else {
+                println!("{:?}", Error::new("Expected number after '..'", position.clone(), ErrorCause::UnexpectedNode));
+            }
+        }
+
+        nodes!(Fragment::Symbol('.'), rest) => {
+            if let Fragment::Numeric(frac) = rest {
+                println!("Decimal: {}.{}", base, frac);
+
+                // let value = format!("{}.{}", base, frac).parse::<f32>()
+                //     .map_err(|_| Error::new("Failed to parse decimal", iter.position.clone().clone(), ErrorCause::InternalError));
+
+                // println!("{:?}", Token::Numeric(Number::Decimal(value)));
+            } else {
+                // println!("{:?}", Error::new("Expected number after '.'", iter.position.clone(), ErrorCause::UnexpectedNode));
+            }
+
+            iter.skip(2);
+        }
+
+        _ => {
+            // let value = base.parse::<i32>()
+            //     .map_err(|_| Error::new("Failed to parse integer", iter.position.clone(), ErrorCause::InternalError));
+
+            // println!("{:?}", Token::Numeric(Number::Integer(value)));
         }
     }
 }

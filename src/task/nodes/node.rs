@@ -3,10 +3,17 @@ use std::fmt::{Debug, Display};
 
 #[macro_export]
 macro_rules! nodes {
-    ($($pat:pat),*) => {
+    ($($item:pat),*) => {
         [$(
-            Node { data: $pat, .. }
+            Some(Node { data: $item, .. })
         ),*,..]
+    };
+}
+
+#[macro_export] 
+macro_rules! node {
+    ($data:pat, $position: pat) => {
+        Some(Node { data: $data, position: $position })
     };
 }
 

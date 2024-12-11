@@ -11,6 +11,7 @@ use std::env;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Seek, Write};
 use std::path::PathBuf;
+use peekmore::{PeekMore, PeekMoreIterator};
 use crate::task::layers::fragmentize::fragmentize;
 use crate::task::layers::tokenize::tokenize;
 
@@ -79,6 +80,7 @@ fn load(origin: PathBuf, target: PathBuf, progress_bar: ProgressBar) {
     fs_extra::dir::copy(&origin, &target, &options).expect("Copy files");
 }
 
+
 fn main() {
     let file = File::open("src/test").unwrap();
     let mut reader = BufReader::new(&file);
@@ -86,18 +88,18 @@ fn main() {
     let mut data = String::new();
     reader.read_to_string(&mut data).unwrap();
 
-
-    let fragments = fragmentize(&data);
+    // let fragments = fragmentize(&data);
 
     // for fragment in fragments {
     //     println!("{:?}", fragment);
     // }
 
-    tokenize(fragments);
+    // tokenize(fragments);
 
 
 
-    // 
+
+    //
     // 
     // match tokens {
     //     Collection::Ok(tokens) => {
@@ -116,9 +118,6 @@ fn main() {
     //         }
     //     }
     // }
-
-
-
 
 
     return;

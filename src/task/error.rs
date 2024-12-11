@@ -17,6 +17,7 @@ pub struct ErrorContext {
 #[derive(Debug)]
 pub enum ErrorCause {
     UnexpectedNode,
+    InternalError,
     EndOfFile,
 }
 
@@ -24,6 +25,7 @@ impl ErrorCause {
     pub fn stringify(&self) -> &str {
         match self {
             ErrorCause::UnexpectedNode => "Unexpected node",
+            ErrorCause::InternalError => "Internal error",
             ErrorCause::EndOfFile => "End of file",
         }
     }
