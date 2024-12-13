@@ -1,3 +1,2 @@
-pub mod str;
-pub mod num;
-pub mod str_expr;
+pub mod number;
+pub mod string;

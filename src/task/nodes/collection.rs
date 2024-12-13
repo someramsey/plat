@@ -11,12 +11,6 @@ impl<T> NodeCollection<T> {
         NodeCollection::Ok(Vec::new())
     }
 
-    pub fn push(&mut self, data: Node<T>) {
-        if let NodeCollection::Ok(vec) = self {
-            vec.push(data);
-        }
-    }
-
     pub fn throw(&mut self, err: Error) {
         match self {
             NodeCollection::Ok(_) => *self = NodeCollection::Failed(vec![err]),

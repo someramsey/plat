@@ -1,226 +1,191 @@
-use std::slice::Iter;
-use crate::{node, nodes};
-use crate::task::data::num::Number;
-use crate::task::data::str::Str;
-use crate::task::data::str_expr::StrExpression;
+use crate::task::data::number::Number;
+use crate::task::data::string::{ch_to_box, StringPart};
+use crate::task::error::{Error, ErrorKind};
 use crate::task::layers::fragmentize::Fragment;
+use crate::task::nodes::collection::NodeCollection;
 use crate::task::nodes::iterator::NodeIter;
 use crate::task::nodes::node::Node;
-use std::sync::Arc;
-use peekmore::{PeekMore, PeekMoreIterator};
-use crate::task::error::{Error, ErrorCause};
-use crate::task::position::Position;
+use crate::{node, nodes};
+use std::fmt::{Debug, Display, Formatter};
 
 #[derive(Debug)]
-pub enum Token {
-    Segment(Str),
-    Variable(Str),
+pub enum Token<'a> {
+    Segment(&'a str),
     Symbol(char),
-    String(StrExpression),
-    Regex(Str),
+    String(Box<[StringPart]>),
+    Variable(Box<str>),
+    Regex(Box<str>),
     Numeric(Number),
     Range(i32, i32),
 }
 
-impl Token {
-    pub fn stringify(&self) -> Str {
+impl<'a> Display for Token<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Token::Segment(str) => str.clone(),
-            Token::Symbol(ch) => Arc::from(format!("symbol '{}'", ch)),
-            Token::Numeric(num) => num.stringify(),
-            Token::String(str) => Arc::from("string"),
-            Token::Regex(str) => Arc::from(format!("regex (\"{}\")", str)),
-            Token::Variable(str) => Arc::from(format!("${}", str)),
-            Token::Range(start, end) => Arc::from(format!("range {}..{}", start, end)),
+            Token::Segment(str) => write!(f, "{}", *str),
+            Token::Numeric(num) => write!(f, "{}", num),
+            Token::Symbol(ch) => write!(f, "symbol '{}'", ch),
+            Token::String(_) => write!(f, "string"),
+            Token::Regex(str) => write!(f, "regex (\"{}\")", str),
+            Token::Variable(str) => write!(f, "${}", str),
+            Token::Range(start, end) => write!(f, "range {}..{}", start, end),
         }
     }
 }
-
 
 pub fn tokenize(fragments: Vec<Node<Fragment>>) {
-    let mut iter: NodeIter<Fragment> = fragments.iter().peekmore();
+    let mut iter: NodeIter<Fragment> = NodeIter::new(fragments);
+    let mut collection: NodeCollection<Token> = NodeCollection::new();
 
-    while let Some(node) = iter.next() {
-        match node.data {
+    while let Some(head) = iter.next() {
+        let capture = match head.data {
+            Fragment::AlphaNumeric(str) => Ok(Token::Segment(str)),
+            Fragment::Numeric(base) => tokenize_numeric(&mut iter, base),
+
             Fragment::Symbol(ch) => match ch {
-                '"' => {
-                    println!("String: ");
-                }
+                '"' => capture_string(&mut iter),
+                '/' => capture_regex(&mut iter),
+                '$' => capture_variable(&mut iter),
 
-                '/' => {
-                    println!("Regex: ");
-                }
+                _ => Ok(Token::Symbol(ch))
+            }
+        };
 
-                '$' => {
-                    println!("Variable: ");
-                }
-
-                _ => {
-                    println!("Symbol: '{}'", ch);
+        match capture {
+            Ok(data) => {
+                if let NodeCollection::Ok(ref mut vec) = collection {
+                    vec.push(Node::new(data, head.position.clone()));
                 }
             }
 
-            Fragment::AlphaNumeric(str) => {
-                println!("AlphaNumeric: {}", str);
-            }
-
-            Fragment::Numeric(base) => {
-                dw(&mut iter, base);
-            }
+            Err(err) => collection.throw(err)
         }
     }
 }
 
+fn tokenize_numeric<'a>(iter: &mut NodeIter<Fragment<'a>>, base: &str) -> Result<Token<'a>, Error> {
+    let begin = iter.position.clone();
 
-fn dw(iter: &mut NodeIter<Fragment>, base: &str) {
-    match iter.peek_amount(2) {
+    return match iter.peek_slice(2) {
         nodes!(Fragment::Symbol('.'), Fragment::Symbol('.')) => {
-            iter.skip(2);
+            iter.skip_by(2);
 
             if let node!(Fragment::Numeric(end), position) = iter.peek() {
-                iter.skip(1);
-
-                let start = base.parse::<i32>()
-                    .map_err(|_| Error::new("Failed to parse range start", position.clone(), ErrorCause::InternalError))?;
+                let begin = base.parse::<i32>()
+                    .map_err(|_| Error::new("Failed to parse range start", begin, ErrorKind::InternalError))?;
 
                 let end = end.parse::<i32>()
-                    .map_err(|_| Error::new("Failed to parse range end", position.clone(), ErrorCause::InternalError))?;
+                    .map_err(|_| Error::new("Failed to parse range end", position.clone(), ErrorKind::InternalError))?;
 
-                println!("{:?}", Token::Range(start, end));
-            } else {
-                println!("{:?}", Error::new("Expected number after '..'", position.clone(), ErrorCause::UnexpectedNode));
+                iter.skip();
+
+                return Ok(Token::Range(begin, end));
             }
+
+            Err(Error::new("Expected number after '..'", begin, ErrorKind::UnexpectedNode))
         }
 
         nodes!(Fragment::Symbol('.'), rest) => {
             if let Fragment::Numeric(frac) = rest {
-                println!("Decimal: {}.{}", base, frac);
+                let value = format!("{}.{}", base, frac).parse::<f32>()
+                    .map_err(|_| Error::new("Failed to parse decimal", begin, ErrorKind::InternalError))?;
 
-                // let value = format!("{}.{}", base, frac).parse::<f32>()
-                //     .map_err(|_| Error::new("Failed to parse decimal", iter.position.clone().clone(), ErrorCause::InternalError));
+                iter.skip();
 
-                // println!("{:?}", Token::Numeric(Number::Decimal(value)));
-            } else {
-                // println!("{:?}", Error::new("Expected number after '.'", iter.position.clone(), ErrorCause::UnexpectedNode));
+                return Ok(Token::Numeric(Number::Decimal(value)));
             }
 
-            iter.skip(2);
+            iter.skip();
+
+            Err(Error::new("Expected number after '.'", iter.position.clone(), ErrorKind::UnexpectedNode))
         }
 
         _ => {
-            // let value = base.parse::<i32>()
-            //     .map_err(|_| Error::new("Failed to parse integer", iter.position.clone(), ErrorCause::InternalError));
+            let value = base.parse::<i32>()
+                .map_err(|_| Error::new("Failed to parse integer", begin, ErrorKind::InternalError))?;
 
-            // println!("{:?}", Token::Numeric(Number::Integer(value)));
+            Ok(Token::Numeric(Number::Integer(value)))
         }
-    }
+    };
 }
 
-// pub fn tokenize(fragments: Vec<Node<Fragment>>) -> Collection<Node<Token>> {
-//     let mut collection: Collection<Node<Token>> = Collection::new();
-//     // let mut iter = NodeIter::new(&fragments);
-//     let mut iter = fragments.into_iter().peekable();
-//
-//
-//     while let Some(fragment) = iter.peek() {
-//
-//         match fragment.data {
-//             Fragment::Numeric(slice) => {}
-//
-//             Fragment::Symbol(ch) => {
-//                 let capture_result = match ch {
-//                     '"' => capture_string(&mut iter),
-//                     '/' => capture_regex(&mut iter),
-//                     '$' => capture_variable(&mut iter),
-//                     _ => Ok(Token::Symbol(ch))
-//                 };
-//
-//                 match capture_result {
-//                     Ok(token) => collection.push(Node::new(token, fragment.position.clone())),
-//                     Err(err) => collection.throw(err)
-//                 }
-//             }
-//
-//             Fragment::AlphaNumeric(str) => {
-//                 collection.push(Node::new(
-//                     Token::Segment(Arc::from(str)),
-//                     fragment.position.clone(),
-//                 ));
-//             }
-//         }
-//     }
-//
-//     return collection;
-// }
-//
-// fn capture_variable(iter: &mut NodeIter<Fragment>) -> Result<Token, Error> {
-//     expect!(iter, Fragment::AlphaNumeric(x) => x)
-//         .map_err(|context| Error::with_context("Expected variable identifier after '$'", context))
-//         .map(|identifier| Token::Variable(Arc::from(identifier)))
-// }
-//
-// fn capture_regex(iter: &mut NodeIter<Fragment>) -> Result<Token, Error> {
-//     let mut parts: Vec<Str> = Vec::new();
-//
-//     while let Some(fragment) = iter.current {
-//         match fragment.data {
-//             Fragment::Symbol('\\') => {
-//                 iter.next();
-//             }
-//
-//             Fragment::Symbol('/') => {
-//                 return Ok(Token::Regex(concat_str(parts)));
-//             }
-//
-//             Fragment::Numeric(slice) |
-//             Fragment::AlphaNumeric(slice) => parts.push(Arc::from(slice)),
-//
-//             Fragment::Symbol(ch) => parts.push(ch_to_str(ch)),
-//         }
-//
-//         iter.next();
-//     }
-//
-//     Err(Error::new("Failed to capture regex", iter.position.clone(), ErrorCause::EndOfFile))
-// }
-//
+//TODO: concat the internal error messages when throwing
 
-// fn capture_string(iter: &mut Iter<Fragment>) -> Result<Token, Error> {
-//     let mut expr = StrExpression::new();
-//
-//     while let Some(fragment) = iter.peek() {
-//         match fragment.data {
-//             Fragment::Symbol(ch) => {
-//                 match ch {
-//                     '"' => {
-//                         iter.next();
-//                         return Ok(Token::String(expr))
-//                     },
-//
-//                     '\\' => {
-//                         iter.next();
-//                     }
-//
-//                     '$' => {
-//                         let slice = expect!(iter, Fragment::AlphaNumeric(x) => x)
-//                             .map_err(|context| Error::with_context("Expected variable identifier after '$'", context))?;
-//
-//                         expr.push(StrExpressionItem::Variable(Arc::from(slice)));
-//                     }
-//
-//                     _ => expr.push(StrExpressionItem::Literal(ch_to_str(ch)))
-//                 }
-//             }
-//
-//             Fragment::Numeric(slice) |
-//             Fragment::AlphaNumeric(slice) =>
-//                 expr.push(StrExpressionItem::Literal(Arc::from(slice))),
-//         }
-//
-//         iter.next();
-//     }
-//
-//     Err(Error::new("Failed to capture string", iter.position.clone(), ErrorCause::EndOfFile))
-// }
-//
+fn capture_variable<'a>(iter: &mut NodeIter<Fragment<'a>>) -> Result<Token<'a>, Error> {
+    if let node!(Fragment::AlphaNumeric(slice), position) = iter.peek() {
+        let val = Box::from(*slice);
+        iter.skip();
+
+        return Ok(Token::Variable(val));
+    }
+
+    Err(Error::new("Expected variable identifier", iter.position.clone(), ErrorKind::UnexpectedNode))
+}
+
+fn capture_regex<'a>(iter: &mut NodeIter<Fragment<'a>>) -> Result<Token<'a>, Error> {
+    let mut data: String = String::new();
+
+    while let Some(fragment) = iter.next() {
+        match fragment.data {
+            Fragment::Symbol('\\') => {
+                iter.next();
+            }
+
+            Fragment::Symbol('/') => {
+                iter.next();
+                return Ok(Token::Regex(data.into_boxed_str()));
+            }
+
+            Fragment::Numeric(slice) |
+            Fragment::AlphaNumeric(slice) => data.push_str(slice),
+
+            Fragment::Symbol(ch) => data.push(ch)
+        }
+    }
+
+    Err(Error::new("Unterminated Regex, Expected '/'", iter.position.clone(), ErrorKind::EndOfFile))
+}
+
+fn capture_string<'a>(iter: &mut NodeIter<Fragment<'a>>) -> Result<Token<'a>, Error> {
+    let mut expr: Vec<StringPart> = Vec::new();
+
+    while let Some(fragment) = iter.peek() {
+        match fragment.data {
+            Fragment::Numeric(slice) |
+            Fragment::AlphaNumeric(slice) =>
+                expr.push(StringPart::Literal(Box::from(slice))),
+
+            Fragment::Symbol(ch) => {
+                match ch {
+                    '\\' => { iter.next(); }
+
+                    '"' => {
+                        iter.next();
+
+                        let slice = expr.into_boxed_slice();
+                        return Ok(Token::String(slice));
+                    },
+
+                    '$' => match iter.next() {
+                        node!(Fragment::AlphaNumeric(slice), position) => {
+                            expr.push(StringPart::Variable(Box::from(slice)));
+                        }
+
+                        _ => return Err(Error::new("Expected variable identifier after '$'", iter.position.clone(), ErrorKind::UnexpectedNode))
+                    },
+
+                    _ => match ch_to_box(ch) {
+                        Ok(slice) => expr.push(StringPart::Literal(slice)),
+                        Err(_) => return Err(Error::new("Failed to encode utf8", iter.position.clone(), ErrorKind::InternalError))
+                    },
+                }
+            }
+        }
+
+        iter.next();
+    }
+
+    Err(Error::new("Unterminated String, Expectd '\"'", iter.position.clone(), ErrorKind::EndOfFile))
+}
+
 

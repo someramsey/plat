@@ -1,62 +1,55 @@
-use crate::task::data::str::Str;
 use crate::task::position::Position;
-use std::sync::Arc;
+use std::fmt::{Display, Formatter};
 
 #[derive(Debug)]
 pub struct Error {
-    pub message: Str,
-    pub context: ErrorContext
-}
-
-#[derive(Debug)]
-pub struct ErrorContext {
-    pub position: Position,
     pub cause: ErrorCause,
+    pub position: Position,
 }
 
 #[derive(Debug)]
-pub enum ErrorCause {
+pub struct ErrorCause {
+    pub message: Box<str>,
+    pub kind: ErrorKind,
+}
+
+#[derive(Debug)]
+pub enum ErrorKind {
     UnexpectedNode,
     InternalError,
     EndOfFile,
 }
 
-impl ErrorCause {
-    pub fn stringify(&self) -> &str {
-        match self {
-            ErrorCause::UnexpectedNode => "Unexpected node",
-            ErrorCause::InternalError => "Internal error",
-            ErrorCause::EndOfFile => "End of file",
-        }
-    }
-}
+impl Display for ErrorKind {
 
-impl ErrorContext {
-    pub fn new(position: Position, cause: ErrorCause) -> Self {
-        Self { position, cause }
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ErrorKind::UnexpectedNode => write!(f, "Unexpected node"),
+            ErrorKind::InternalError => write!(f, "Internal error"),
+            ErrorKind::EndOfFile => write!(f, "End of file"),
+        }
     }
 }
 
 impl Error {
-    pub fn new(message: &str, position: Position, cause: ErrorCause) -> Self {
+    pub fn new(message: &str, position: Position, kind: ErrorKind) -> Self {
         Self {
-            message: Arc::from(message),
-            context: ErrorContext::new(position, cause),
+            position,
+            cause: ErrorCause {
+                kind,
+                message: Box::from(message),
+            },
         }
     }
+}
 
-    pub fn with_context(message: &str, context: ErrorContext) -> Self {
-        Self {
-            message: Arc::from(message),
-            context,
-        }
-    }
-
-    pub fn stringify(&self) -> String {
-        format!(
-            "[{}] {} at {}:{}",
-            self.context.cause.stringify(),
-            self.message, self.context.position.line, self.context.position.column
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}] {} at {}:{}",
+               self.cause.kind,
+               self.cause.message,
+               self.position.line,
+               self.position.column
         )
     }
 }
