@@ -14,6 +14,7 @@ use std::path::PathBuf;
 use peekmore::{PeekMore, PeekMoreIterator};
 use crate::task::layers::fragmentize::fragmentize;
 use crate::task::layers::tokenize::tokenize;
+use crate::task::nodes::collection::NodeCollection;
 
 fn open_data_file() -> File {
     let path = env::current_exe()
@@ -88,36 +89,24 @@ fn main() {
     let mut data = String::new();
     reader.read_to_string(&mut data).unwrap();
 
-    // let fragments = fragmentize(&data);
+    let fragments = fragmentize(&data);
+    let tokens = tokenize(fragments);
+ 
+    match tokens {
+        NodeCollection::Ok(tokens) => {
+            for token in tokens {
+                println!("{:?}", token);
+            }
+        }
+        
+        NodeCollection::Failed(errors) => {
+            for error in errors {
+                println!("{:?}", error);
+            }
+        }
+    }
 
-    // for fragment in fragments {
-    //     println!("{:?}", fragment);
-    // }
 
-    // tokenize(fragments);
-
-
-
-
-    //
-    // 
-    // match tokens {
-    //     Collection::Ok(tokens) => {
-    //         for token in tokens {
-    //             println!("{:?}", token);
-    //         }
-    // 
-    //         // let fields = parse_env(tokens);
-    //         //
-    //         // println!("{:?}", fields);
-    //     }
-    // 
-    //     Collection::Failed(errors) => {
-    //         for error in errors {
-    //             println!("{:?}", error);
-    //         }
-    //     }
-    // }
 
 
     return;

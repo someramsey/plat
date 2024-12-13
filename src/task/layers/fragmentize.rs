@@ -82,20 +82,11 @@ pub fn fragmentize(data: &str) -> Vec<Node<Fragment>> {
 
     while let Some(ch) = iteration.current {
         if ch.is_numeric() {
-            while let Some(ch) = iteration.current {
-                if !ch.is_numeric() {
-                    break;
-                }
-
-                cursor.take();
-                iteration.advance(ch);
-            }
-
-            fragments.push(Node::new(
-                Fragment::Numeric(cursor.collect()),
-                iteration.position.clone(),
-            ));
+            let pos = iteration.position.clone();
+            numeric(&mut fragments, &mut iteration, &mut cursor, pos);
         } else if ch.is_alphanumeric() {
+            let pos = iteration.position.clone();
+
             while let Some(ch) = iteration.current {
                 if !ch.is_alphanumeric() {
                     break;
@@ -105,12 +96,14 @@ pub fn fragmentize(data: &str) -> Vec<Node<Fragment>> {
                 iteration.advance(ch);
             }
 
-            fragments.push(Node::new(
-                Fragment::AlphaNumeric(cursor.collect()),
-                iteration.position.clone(),
-            ));
+            fragments.push(Node::new(Fragment::AlphaNumeric(cursor.collect()), pos));
         } else {
-            if !ch.is_whitespace() {
+            if ch == '-' {
+                let pos = iteration.position.clone();
+
+                iteration.advance(ch);
+                numeric(&mut fragments, &mut iteration, &mut cursor, pos);
+            } else if !ch.is_whitespace() {
                 fragments.push(Node::new(
                     Fragment::Symbol(ch),
                     iteration.position.clone(),
@@ -123,4 +116,17 @@ pub fn fragmentize(data: &str) -> Vec<Node<Fragment>> {
     }
 
     return fragments;
+}
+
+fn numeric<'a>(fragments: &mut Vec<Node<Fragment<'a>>>, mut iteration: &mut Iteration, mut cursor: &mut Cursor<'a>, position: Position) {
+    while let Some(ch) = iteration.current {
+        if !ch.is_numeric() {
+            break;
+        }
+
+        cursor.take();
+        iteration.advance(ch);
+    }
+
+    fragments.push(Node::new(Fragment::Numeric(cursor.collect()), position));
 }

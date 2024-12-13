@@ -33,7 +33,7 @@ impl<'a> Display for Token<'a> {
     }
 }
 
-pub fn tokenize(fragments: Vec<Node<Fragment>>) {
+pub fn tokenize(fragments: Vec<Node<Fragment>>) -> NodeCollection<Token> {
     let mut iter: NodeIter<Fragment> = NodeIter::new(fragments);
     let mut collection: NodeCollection<Token> = NodeCollection::new();
 
@@ -61,6 +61,8 @@ pub fn tokenize(fragments: Vec<Node<Fragment>>) {
             Err(err) => collection.throw(err)
         }
     }
+
+    return collection;
 }
 
 fn tokenize_numeric<'a>(iter: &mut NodeIter<Fragment<'a>>, base: &str) -> Result<Token<'a>, Error> {
@@ -90,7 +92,7 @@ fn tokenize_numeric<'a>(iter: &mut NodeIter<Fragment<'a>>, base: &str) -> Result
                 let value = format!("{}.{}", base, frac).parse::<f32>()
                     .map_err(|_| Error::new("Failed to parse decimal", begin, ErrorKind::InternalError))?;
 
-                iter.skip();
+                iter.skip_by(2);
 
                 return Ok(Token::Numeric(Number::Decimal(value)));
             }
