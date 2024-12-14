@@ -1,18 +1,18 @@
 use crate::task::data::number::Number;
-use crate::task::data::string::{ch_to_box, StringPart};
+use crate::task::data::string::{ch_to_box, StringExpression, StringPart};
 use crate::task::error::{Error, ErrorKind};
 use crate::task::layers::fragmentize::Fragment;
 use crate::task::nodes::collection::NodeCollection;
 use crate::task::nodes::iterator::NodeIter;
 use crate::task::nodes::node::Node;
-use crate::{node, nodes};
+use crate::{symbol, nodes, node};
 use std::fmt::{Debug, Display, Formatter};
 
 #[derive(Debug)]
 pub enum Token<'a> {
     Segment(&'a str),
     Symbol(char),
-    String(Box<[StringPart]>),
+    String(StringExpression),
     Variable(Box<str>),
     Regex(Box<str>),
     Numeric(Number),
@@ -37,8 +37,8 @@ pub fn tokenize(fragments: Vec<Node<Fragment>>) -> NodeCollection<Token> {
     let mut iter: NodeIter<Fragment> = NodeIter::new(fragments);
     let mut collection: NodeCollection<Token> = NodeCollection::new();
 
-    while let Some(head) = iter.next() {
-        let capture = match head.data {
+    while let node!(data, position) = iter.next() {
+        let capture = match data {
             Fragment::AlphaNumeric(str) => Ok(Token::Segment(str)),
             Fragment::Numeric(base) => tokenize_numeric(&mut iter, base),
 
@@ -52,9 +52,9 @@ pub fn tokenize(fragments: Vec<Node<Fragment>>) -> NodeCollection<Token> {
         };
 
         match capture {
-            Ok(data) => {
+            Ok(token) => {
                 if let NodeCollection::Ok(ref mut vec) = collection {
-                    vec.push(Node::new(data, head.position.clone()));
+                    vec.push(Node::new(token, position.clone()));
                 }
             }
 

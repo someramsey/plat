@@ -1,38 +1,45 @@
-use crate::task::collection::Collection;
-use crate::task::layers::parsers::context::ParseContext;
-use crate::task::data::str::Str;
-use crate::task::data::str_expr::StrExpression;
+use crate::task::data::number::Number;
+use crate::task::data::string::StringExpression;
 use crate::task::layers::tokenize::Token;
-use crate::task::node::Node;
+use crate::task::nodes::collection::NodeCollection;
+use crate::task::nodes::iterator::NodeIter;
+use crate::task::nodes::node::Node;
+use crate::{node, symbol};
 
 #[derive(Debug)]
 pub enum Validator {
     Text,
     Number,
-    Custom(Str),
+    Decimal,
+    Integer,
+    Regex(Box<str>),
+    Range(i32, i32),
 }
 
 #[derive(Debug)]
 pub enum FieldData {
     Input(Validator),
-    Switch(Vec<StrExpression>),
+    Switch(StringExpression),
 }
 
 #[derive(Debug)]
 pub struct Field {
-    pub identifier: Str,
-    pub prompt: Str,
+    pub identifier: Box<str>,
+    pub prompt: StringExpression,
     pub data: FieldData,
 }
 
-pub enum MatchType {
-    Regex(Str),
-    Segment(Str),
+pub enum MatchPattern {
+    String(StringExpression),
+    Regex(Box<str>),
+    Number(Number),
+    Range(i32, i32),
+    Any
 }
 
 pub struct Match {
-    pub target: Str,
-
+    pattern: Vec<MatchPattern>,
+    body: Vec<Statement>
 }
 
 pub enum Statement {
@@ -40,17 +47,45 @@ pub enum Statement {
     Match(Match)
 }
 
-pub fn parse_env(data: Vec<Token>) -> Collection<Node<Field>> {
-    let mut iterator = data.into_iter();
-    let mut context = ParseContext::new(iterator);
 
-    while !context.is_done() {
-        // parse_full(&mut context);
+#[macro_export]
+macro_rules! symbol {
+    ($data:pat) => {
+        Some(Node { data: Token::Symbol($data), .. })
+    };
+}
+
+pub fn parse_env(tokens: Vec<Node<Token>>) -> NodeCollection<Statement> {
+    let mut iter = NodeIter::new(tokens);
+    let mut collection = NodeCollection::new();
+
+    while let node!(head, position) = iter.next() {
+        match head {
+            Token::Variable(identifier) => {
+                //expect ':'
+                //expect type
+                //expect '>'
+                //expect string
+                //expect semi
+
+            }
+
+            Token::Segment(segment) => {
+
+            }
+
+            _ => {
+                println!("Unexpected Token");
+            }
+        }
+
+
     }
 
-    return context.collection;
+    return collection;
 }
-//
+
+
 // fn parse_full(context: &mut ParseContext<Field>) {
 //     let identifier = match context.read_segment() {
 //         Some(identifier) => identifier,

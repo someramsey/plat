@@ -91,14 +91,14 @@ fn main() {
 
     let fragments = fragmentize(&data);
     let tokens = tokenize(fragments);
- 
+
     match tokens {
         NodeCollection::Ok(tokens) => {
             for token in tokens {
                 println!("{:?}", token);
             }
         }
-        
+
         NodeCollection::Failed(errors) => {
             for error in errors {
                 println!("{:?}", error);

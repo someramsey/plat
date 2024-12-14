@@ -1,5 +1,7 @@
 use std::str::{from_utf8, Utf8Error};
 
+pub type StringExpression = Box<[StringPart]>;
+
 #[derive(Debug, Clone)]
 pub enum StringPart {
     Literal(Box<str>),
