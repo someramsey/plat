@@ -55,9 +55,34 @@ macro_rules! symbol {
     };
 }
 
+enum ParseToken {
+    Scopes,
+    Field,
+    Prompt,
+    Validator
+}
+
+
+
+pub fn parse_first(tokens: Vec<Node<Token>>) -> NodeCollection<ParseToken> {
+    let mut iter = NodeIter::new(tokens);
+    let mut collection = NodeCollection::new();
+    
+    return collection;
+}
+
+pub fn parse_last(tokens: Vec<Node<ParseToken>>) -> NodeCollection<Statement> {
+    let mut iter = NodeIter::new(tokens);
+    let mut collection = NodeCollection::new();
+    
+    return collection;
+}
+
 pub fn parse_env(tokens: Vec<Node<Token>>) -> NodeCollection<Statement> {
     let mut iter = NodeIter::new(tokens);
     let mut collection = NodeCollection::new();
+    
+
 
     while let node!(head, position) = iter.next() {
         match head {
