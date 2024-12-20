@@ -6,6 +6,8 @@ pub enum NodeCollection<T> {
     Failed(Vec<Error>),
 }
 
+pub type CollectionResult<T> = Result<Vec<Node<T>>, Vec<Error>>;
+
 impl<T> NodeCollection<T> {
     pub fn new() -> Self {
         NodeCollection::Ok(Vec::new())
@@ -15,6 +17,13 @@ impl<T> NodeCollection<T> {
         match self {
             NodeCollection::Ok(_) => *self = NodeCollection::Failed(vec![err]),
             NodeCollection::Failed(vec) => vec.push(err)
+        }
+    }
+    
+    pub fn into_result(self) -> CollectionResult<T> {
+        match self {
+            NodeCollection::Ok(tokens) => Ok(tokens),
+            NodeCollection::Failed(errors) => Err(errors)
         }
     }
 }

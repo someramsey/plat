@@ -1,110 +1,107 @@
-use crate::task::data::number::Number;
-use crate::task::data::string::StringExpression;
 use crate::task::layers::tokenize::Token;
-use crate::task::nodes::collection::NodeCollection;
+use crate::task::nodes::collection::{NodeCollection, CollectionResult};
 use crate::task::nodes::iterator::NodeIter;
 use crate::task::nodes::node::Node;
-use crate::{node, symbol};
+use crate::node;
+use crate::task::data::range::Range;
+use crate::task::data::string::StringExpression;
+use crate::task::error::{Error, ErrorKind};
 
-#[derive(Debug)]
-pub enum Validator {
-    Text,
-    Number,
-    Decimal,
-    Integer,
-    Regex(Box<str>),
-    Range(i32, i32),
-}
-
-#[derive(Debug)]
-pub enum FieldData {
-    Input(Validator),
-    Switch(StringExpression),
-}
-
-#[derive(Debug)]
-pub struct Field {
-    pub identifier: Box<str>,
-    pub prompt: StringExpression,
-    pub data: FieldData,
-}
-
-pub enum MatchPattern {
-    String(StringExpression),
-    Regex(Box<str>),
-    Number(Number),
-    Range(i32, i32),
-    Any
-}
-
-pub struct Match {
-    pattern: Vec<MatchPattern>,
-    body: Vec<Statement>
-}
-
-pub enum Statement {
-    Field(Field),
-    Match(Match)
-}
-
-
-#[macro_export]
 macro_rules! symbol {
     ($data:pat) => {
         Some(Node { data: Token::Symbol($data), .. })
     };
 }
 
-enum ParseToken {
-    Scopes,
-    Field,
-    Prompt,
-    Validator
-}
-
-
-
-pub fn parse_first(tokens: Vec<Node<Token>>) -> NodeCollection<ParseToken> {
-    let mut iter = NodeIter::new(tokens);
-    let mut collection = NodeCollection::new();
-    
-    return collection;
-}
-
-pub fn parse_last(tokens: Vec<Node<ParseToken>>) -> NodeCollection<Statement> {
-    let mut iter = NodeIter::new(tokens);
-    let mut collection = NodeCollection::new();
-    
-    return collection;
-}
-
-pub fn parse_env(tokens: Vec<Node<Token>>) -> NodeCollection<Statement> {
-    let mut iter = NodeIter::new(tokens);
-    let mut collection = NodeCollection::new();
-    
-
-
-    while let node!(head, position) = iter.next() {
-        match head {
-            Token::Variable(identifier) => {
-                //expect ':'
-                //expect type
-                //expect '>'
-                //expect string
-                //expect semi
-
+macro_rules! expect_symbol {
+    ($data:expr, $symbol:pat) => {
+        match $data {
+            node!(data,position) => {
+                if !matches!(data,Token::Symbol($symbol))  {
+                    collection.throw(Error::new(format!("Expected '{symbol}'"), position, ErrorKind::Unexpected));
+                    return;
+                }
             }
 
-            Token::Segment(segment) => {
-
-            }
-
-            _ => {
-                println!("Unexpected Token");
+            None => {
+                collection.throw(Error::new(format!("Expected '{symbol}'"), position, ErrorKind::EndOfFile));
+                return;
             }
         }
+    };
+}
 
+pub enum MetaFieldType {
+    Text,
+    Integer,
+    Decimal,
+    Switch,
+}
 
+pub enum MetaValidator {
+    Range(Range),
+    Regex(Box<str>),
+    Switch(Box<[StringExpression]>),
+}
+
+pub enum CompoundBase<'a> {
+    Declaration(&'a str, MetaFieldType),
+    Prompt(&'a str),
+    Validator(MetaValidator),
+}
+
+pub enum FieldData {
+    Text(Option<Box<str>>),
+    Integer(Option<Range>),
+    Decimal(Option<Range>),
+    Switch(Box<[StringExpression]>)
+}
+
+pub enum Compound<'a> {
+    Field {
+        identifier: &'a str,
+        prompt: &'a str,
+        data: FieldData,
+    }
+}
+
+pub fn parse_env(tokens: Vec<Node<Token>>) -> CollectionResult<Compound> {
+    let mut first_pass = match parse_base(tokens) {
+        NodeCollection::Ok(tokens) => tokens,
+        NodeCollection::Failed(errors) => {
+            return Err(errors);
+        }
+    };
+
+    return second_pass(first_pass).into_result();
+}
+
+pub fn parse_base(tokens: Vec<Node<Token>>) -> NodeCollection<CompoundBase> {
+    let mut iter = NodeIter::new(tokens);
+    let mut collection = NodeCollection::new();
+
+    while let node!(data, position) = iter.next() {
+        match data {
+            Token::Variable(identifier) => {
+                expect_symbol!(iter.next(), ':');
+
+            },
+
+            _ => todo!()
+        }
+    }
+
+    return collection;
+}
+
+pub fn second_pass(tokens: Vec<Node<CompoundBase>>) -> NodeCollection<Compound> {
+    let mut iter = NodeIter::new(tokens);
+    let mut collection = NodeCollection::new();
+
+    while let node!(data, position) = iter.next() {
+        match data {
+            _ => {}
+        }
     }
 
     return collection;

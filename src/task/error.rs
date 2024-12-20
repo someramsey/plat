@@ -1,6 +1,7 @@
 use crate::task::position::Position;
 use std::fmt::{Display, Formatter};
 
+//TODO: refactor the error system so that it has fields like "expected" "received"
 #[derive(Debug)]
 pub struct Error {
     pub cause: ErrorCause,
@@ -15,7 +16,7 @@ pub struct ErrorCause {
 
 #[derive(Debug)]
 pub enum ErrorKind {
-    UnexpectedNode,
+    Unexpected,
     InternalError,
     EndOfFile,
 }
@@ -24,7 +25,7 @@ impl Display for ErrorKind {
 
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            ErrorKind::UnexpectedNode => write!(f, "Unexpected node"),
+            ErrorKind::Unexpected => write!(f, "Unexpected node"),
             ErrorKind::InternalError => write!(f, "Internal error"),
             ErrorKind::EndOfFile => write!(f, "End of file"),
         }

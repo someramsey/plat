@@ -1,11 +1,12 @@
 use crate::task::data::number::Number;
+use crate::task::data::range::Range;
 use crate::task::data::string::{ch_to_box, StringExpression, StringPart};
 use crate::task::error::{Error, ErrorKind};
 use crate::task::layers::fragmentize::Fragment;
 use crate::task::nodes::collection::NodeCollection;
 use crate::task::nodes::iterator::NodeIter;
 use crate::task::nodes::node::Node;
-use crate::{symbol, nodes, node};
+use crate::{node, nodes};
 use std::fmt::{Debug, Display, Formatter};
 
 #[derive(Debug)]
@@ -13,10 +14,10 @@ pub enum Token<'a> {
     Segment(&'a str),
     Symbol(char),
     String(StringExpression),
-    Variable(Box<str>),
+    Variable(&'a str),
     Regex(Box<str>),
     Numeric(Number),
-    Range(i32, i32),
+    Range(Range),
 }
 
 impl<'a> Display for Token<'a> {
@@ -28,7 +29,7 @@ impl<'a> Display for Token<'a> {
             Token::String(_) => write!(f, "string"),
             Token::Regex(str) => write!(f, "regex (\"{}\")", str),
             Token::Variable(str) => write!(f, "${}", str),
-            Token::Range(start, end) => write!(f, "range {}..{}", start, end),
+            Token::Range(range) => write!(f, "({})", range),
         }
     }
 }
@@ -81,10 +82,10 @@ fn tokenize_numeric<'a>(iter: &mut NodeIter<Fragment<'a>>, base: &str) -> Result
 
                 iter.skip();
 
-                return Ok(Token::Range(begin, end));
+                return Ok(Token::Range(Range::new(begin, end)));
             }
 
-            Err(Error::new("Expected number after '..'", begin, ErrorKind::UnexpectedNode))
+            Err(Error::new("Expected number after '..'", begin, ErrorKind::Unexpected))
         }
 
         nodes!(Fragment::Symbol('.'), rest) => {
@@ -99,7 +100,7 @@ fn tokenize_numeric<'a>(iter: &mut NodeIter<Fragment<'a>>, base: &str) -> Result
 
             iter.skip();
 
-            Err(Error::new("Expected number after '.'", iter.position.clone(), ErrorKind::UnexpectedNode))
+            Err(Error::new("Expected number after '.'", iter.position.clone(), ErrorKind::Unexpected))
         }
 
         _ => {
@@ -115,13 +116,13 @@ fn tokenize_numeric<'a>(iter: &mut NodeIter<Fragment<'a>>, base: &str) -> Result
 
 fn capture_variable<'a>(iter: &mut NodeIter<Fragment<'a>>) -> Result<Token<'a>, Error> {
     if let node!(Fragment::AlphaNumeric(slice), position) = iter.peek() {
-        let val = Box::from(*slice);
+        let dw = *slice;
         iter.skip();
 
-        return Ok(Token::Variable(val));
+        return Ok(Token::Variable(dw));
     }
 
-    Err(Error::new("Expected variable identifier", iter.position.clone(), ErrorKind::UnexpectedNode))
+    Err(Error::new("Expected variable identifier", iter.position.clone(), ErrorKind::Unexpected))
 }
 
 fn capture_regex<'a>(iter: &mut NodeIter<Fragment<'a>>) -> Result<Token<'a>, Error> {
@@ -173,7 +174,7 @@ fn capture_string<'a>(iter: &mut NodeIter<Fragment<'a>>) -> Result<Token<'a>, Er
                             expr.push(StringPart::Variable(Box::from(slice)));
                         }
 
-                        _ => return Err(Error::new("Expected variable identifier after '$'", iter.position.clone(), ErrorKind::UnexpectedNode))
+                        _ => return Err(Error::new("Expected variable identifier after '$'", iter.position.clone(), ErrorKind::Unexpected))
                     },
 
                     _ => match ch_to_box(ch) {
