@@ -83,13 +83,19 @@ fn load(origin: PathBuf, target: PathBuf, progress_bar: ProgressBar) {
 
 
 fn main() {
-    let file = File::open("src/test").unwrap();
+    let file = File::open("src/.platenv").expect("Read test file");
     let mut reader = BufReader::new(&file);
 
     let mut data = String::new();
     reader.read_to_string(&mut data).unwrap();
 
     let fragments = fragmentize(&data);
+
+    // for fragment in fragments {
+    //     println!("{:?}", fragment);
+    // }
+    // return;
+
     let tokens = tokenize(fragments);
 
     match tokens {
@@ -101,7 +107,7 @@ fn main() {
 
         NodeCollection::Failed(errors) => {
             for error in errors {
-                println!("{:?}", error);
+                println!("{}", error);
             }
         }
     }

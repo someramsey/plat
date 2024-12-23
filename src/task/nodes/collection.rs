@@ -26,4 +26,10 @@ impl<T> NodeCollection<T> {
             NodeCollection::Failed(errors) => Err(errors)
         }
     }
+
+    pub fn try_collect(&mut self, getter: impl FnOnce() -> Node<T>) {
+        if let NodeCollection::Ok(vec) = self {
+            vec.push(getter())
+        }
+    }
 }

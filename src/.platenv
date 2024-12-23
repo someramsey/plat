@@ -1,26 +1,26 @@
 $username: Text > "What is your username?" :: /^[a-zA-Z0-9_]{3,18}$/
 $age: Integer > "What is your age?" :: 0..150
 $height: Decimal > "What is your height?"
-$color: Switch > "What is your favorite color?" :: {
+$color: Switch > "What is your favorite color?" :: [
     "Red",
     "Green",
     "Blue",
     "Cyan",
     "Idk"
-}
+]
 
 match $age {
     0..12 {
         $school: Input > "What is your school?"
-    },
+    }
 
     13..18 {
         $grade: Input > "What is your grade?"
-    },
+    }
 
     19..25 {
         $university: Input > "What is your university?"
-    },
+    }
 
     * {
         $job: Input > "What is your job?"
@@ -34,7 +34,7 @@ match $color {
             "Scarlet",
             "Ruby"
         ]
-    },
+    }
 
     "Green" {
         $subcolor: Choice > "What is your favorite subcolor?" :: [
@@ -42,7 +42,7 @@ match $color {
             "Emerald",
             "Forest"
         ]
-    },
+    }
 
     "Blue" | "Cyan" {
         $subcolor: Choice > "What is your favorite subcolor?" :: [
@@ -50,7 +50,7 @@ match $color {
             "Ocean",
             "Navy"
         ]
-    },
+    }
 
     * {
         $subcolor: Input > "What is your favorite subcolor?"

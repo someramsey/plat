@@ -10,10 +10,34 @@ macro_rules! nodes {
     };
 }
 
-#[macro_export] 
+#[macro_export]
 macro_rules! node {
-    ($data:pat, $position: pat) => {
-        Some(Node { data: $data, position: $position })
+    ($data:pat) => { Node { data: $data, .. } };
+    ($data:pat, $position: pat) => { Node { data: $data, position: $position }};
+}
+
+#[macro_export]
+macro_rules! some_node {
+    ($data:pat) => { Some(node!($data)) };
+    ($data:pat, $position: pat) => { Some(node!($data, $position)) };
+}
+
+#[macro_export]
+macro_rules! expect_node {
+    ($node:expr, $expected:pat) => {
+        match $node {
+            v@$expected => Ok(v),
+            some_node!(other, position) => Err(Error::Unexpected { expected: Box::from(stringify!($expected)), received: Box::from(format!("{}", other)), position: position.clone() }),
+            None => Err(Error::EndOfFile { expected: Box::from(stringify!($expected)) })
+        }
+    };
+
+    ($node:expr, $expected:pat => $result:expr) => {
+        match $node {
+            $expected => Ok($result),
+            some_node!(other, position) => Err(Error::Unexpected { expected: Box::from(stringify!($expected)), received: Box::from(format!("{}", other)), position: position.clone() }),
+            None => Err(Error::EndOfFile { expected: Box::from(stringify!($expected)) })
+        }
     };
 }
 
@@ -28,7 +52,10 @@ impl<T> Node<T> {
     }
 }
 
-impl<T> Debug for Node<T> where T: Debug {
+impl<T> Debug for Node<T>
+where
+    T: Debug,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{{ {:?} {:?} }}", self.data, self.position)
     }

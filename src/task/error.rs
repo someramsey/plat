@@ -1,56 +1,52 @@
 use crate::task::position::Position;
 use std::fmt::{Display, Formatter};
 
-//TODO: refactor the error system so that it has fields like "expected" "received"
-#[derive(Debug)]
-pub struct Error {
-    pub cause: ErrorCause,
-    pub position: Position,
-}
-
-#[derive(Debug)]
-pub struct ErrorCause {
-    pub message: Box<str>,
-    pub kind: ErrorKind,
-}
-
-#[derive(Debug)]
-pub enum ErrorKind {
-    Unexpected,
-    InternalError,
-    EndOfFile,
-}
-
-impl Display for ErrorKind {
-
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ErrorKind::Unexpected => write!(f, "Unexpected node"),
-            ErrorKind::InternalError => write!(f, "Internal error"),
-            ErrorKind::EndOfFile => write!(f, "End of file"),
-        }
-    }
-}
-
-impl Error {
-    pub fn new(message: &str, position: Position, kind: ErrorKind) -> Self {
-        Self {
-            position,
-            cause: ErrorCause {
-                kind,
-                message: Box::from(message),
-            },
-        }
-    }
+pub enum Error {
+    Unexpected {
+        expected: Box<str>,
+        received: Box<str>,
+        position: Position,
+    },
+    Invalid {
+        received: Box<str>,
+        position: Position,
+    },
+    EndOfFile {
+        expected: Box<str>,
+    },
+    Other {
+        message: Box<str>,
+        position: Position,
+    },
 }
 
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[{}] {} at {}:{}",
-               self.cause.kind,
-               self.cause.message,
-               self.position.line,
-               self.position.column
-        )
+        match self {
+            Error::EndOfFile { expected } => {
+                write!(f, "Expected '{}', found end of file", expected)
+            }
+
+            Error::Unexpected { expected, received, position } => {
+                write!(f, "Expected '{}', found '{}' at {}:{}",
+                       expected,
+                       received,
+                       position.line,
+                       position.column
+                )
+            }
+
+            Error::Other { message, position } => {
+                write!(f, "Internal error: '{}' at {}:{}",
+                       message,
+                       position.line,
+                       position.column
+                )
+            },
+
+            Error::Invalid { received, position } => {
+                write!(f, "Invalid: '{}'", received)
+            }
+        }
     }
 }

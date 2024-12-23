@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use crate::task::nodes::node::Node;
 use crate::task::position::Position;
 use std::str::Chars;
@@ -6,7 +7,17 @@ use std::str::Chars;
 pub enum Fragment<'a> {
     AlphaNumeric(&'a str),
     Numeric(&'a str),
-    Symbol(char),
+    Symbol(char)
+}
+
+impl Display for Fragment<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Fragment::AlphaNumeric(str) => write!(f, "AlphaNumeric ({})", *str),
+            Fragment::Numeric(str) => write!(f, "Numeric ({})", *str),
+            Fragment::Symbol(ch) => write!(f, "Symbol ({})", ch),
+        }
+    }
 }
 
 struct Cursor<'a> {
@@ -86,21 +97,12 @@ pub fn fragmentize(data: &str) -> Vec<Node<Fragment>> {
             numeric(&mut fragments, &mut iteration, &mut cursor, pos);
         } else if ch.is_alphanumeric() {
             let pos = iteration.position.clone();
-
-            while let Some(ch) = iteration.current {
-                if !ch.is_alphanumeric() {
-                    break;
-                }
-
-                cursor.take();
-                iteration.advance(ch);
-            }
-
-            fragments.push(Node::new(Fragment::AlphaNumeric(cursor.collect()), pos));
+            alphanumeric(&mut fragments, &mut iteration, &mut cursor, pos);
         } else {
             if ch == '-' {
                 let pos = iteration.position.clone();
 
+                cursor.take();
                 iteration.advance(ch);
                 numeric(&mut fragments, &mut iteration, &mut cursor, pos);
             } else if !ch.is_whitespace() {
@@ -118,14 +120,31 @@ pub fn fragmentize(data: &str) -> Vec<Node<Fragment>> {
     return fragments;
 }
 
-fn numeric<'a>(fragments: &mut Vec<Node<Fragment<'a>>>, mut iteration: &mut Iteration, mut cursor: &mut Cursor<'a>, position: Position) {
-    while let Some(ch) = iteration.current {
-        if !ch.is_numeric() {
-            break;
-        }
+fn alphanumeric<'a>(fragments: &mut Vec<Node<Fragment<'a>>>, iteration: &mut Iteration, mut cursor: &mut Cursor<'a>, position: Position) {
+    loop {
+        match iteration.current {
+            Some(ch) if ch.is_alphanumeric() => {
+                cursor.take();
+                iteration.advance(ch);
+            }
 
-        cursor.take();
-        iteration.advance(ch);
+            None | Some(_) => break
+        }
+    }
+
+    fragments.push(Node::new(Fragment::AlphaNumeric(cursor.collect()), position));
+}
+
+fn numeric<'a>(fragments: &mut Vec<Node<Fragment<'a>>>, mut iteration: &mut Iteration, mut cursor: &mut Cursor<'a>, position: Position) {
+    loop {
+        match iteration.current {
+            Some(ch) if ch.is_numeric() => {
+                cursor.take();
+                iteration.advance(ch);
+            }
+
+            None | Some(_) => break
+        }
     }
 
     fragments.push(Node::new(Fragment::Numeric(cursor.collect()), position));
