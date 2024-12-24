@@ -6,7 +6,7 @@ pub enum NodeCollection<T> {
     Failed(Vec<Error>),
 }
 
-pub type CollectionResult<T> = Result<Vec<Node<T>>, Vec<Error>>;
+pub type CollectionResult<T> = Result<Box<[Node<T>]>, Box<[Error]>>;
 
 impl<T> NodeCollection<T> {
     pub fn new() -> Self {
@@ -19,11 +19,18 @@ impl<T> NodeCollection<T> {
             NodeCollection::Failed(vec) => vec.push(err)
         }
     }
-    
-    pub fn into_result(self) -> CollectionResult<T> {
+
+    pub fn throw_all(&mut self, errors: Vec<Error>) {
         match self {
-            NodeCollection::Ok(tokens) => Ok(tokens),
-            NodeCollection::Failed(errors) => Err(errors)
+            NodeCollection::Ok(_) => *self = NodeCollection::Failed(errors),
+            NodeCollection::Failed(vec) => vec.extend(errors)
+        }
+    }
+
+    pub fn into_boxed_result(self) -> CollectionResult<T> {
+        match self {
+            NodeCollection::Ok(tokens) => Ok(tokens.into_boxed_slice()),
+            NodeCollection::Failed(errors) => Err(errors.into_boxed_slice())
         }
     }
 

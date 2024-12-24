@@ -27,16 +27,16 @@ macro_rules! expect_node {
     ($node:expr, $expected:pat) => {
         match $node {
             v@$expected => Ok(v),
-            some_node!(other, position) => Err(Error::Unexpected { expected: Box::from(stringify!($expected)), received: Box::from(format!("{}", other)), position: position.clone() }),
-            None => Err(Error::EndOfFile { expected: Box::from(stringify!($expected)) })
+            some_node!(other, position) => Err(Error::Unexpected { expected: String::from(stringify!($expected)), received: format!("{}", other), position: position.clone() }),
+            None => Err(Error::EndOfFile { expected: String::from(stringify!($expected)) })
         }
     };
 
     ($node:expr, $expected:pat => $result:expr) => {
         match $node {
             $expected => Ok($result),
-            some_node!(other, position) => Err(Error::Unexpected { expected: Box::from(stringify!($expected)), received: Box::from(format!("{}", other)), position: position.clone() }),
-            None => Err(Error::EndOfFile { expected: Box::from(stringify!($expected)) })
+            some_node!(other, position) => Err(Error::Unexpected { expected: String::from(stringify!($expected)), received: format!("{}", other), position: position.clone() }),
+            None => Err(Error::EndOfFile { expected: String::from(stringify!($expected)) })
         }
     };
 }

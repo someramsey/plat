@@ -1,14 +1,20 @@
+use std::fmt::format;
 use crate::task::error::Error;
 use crate::task::layers::tokenize::Token;
 use crate::task::nodes::collection::NodeCollection;
 use crate::task::nodes::iterator::NodeIter;
 use crate::task::nodes::node::Node;
 use crate::task::position::Position;
-use crate::task::value::string::StringExpression;
-use crate::task::value::Value;
-use crate::{expect_node, node, some_node};
 use crate::task::value::range::RangeValue;
+use crate::task::value::string::StringExpression;
+use crate::task::value::{Value, ALL_VALUES};
+use crate::{expect_node, node, some_node};
 
+const VALIDATOR_VALUE_TYPES: &str = "Range, Regex or Symbol";
+
+type Expression<'a> = Box<[Node<Compound<'a>>]>;
+
+#[derive(Debug)]
 pub enum FieldType {
     Text,
     Integer,
@@ -16,32 +22,27 @@ pub enum FieldType {
     Switch,
 }
 
-impl FieldType {
-    pub fn from_str(value: &str) -> Result<Self, &str> {
-        match value {
-            "Text" => Ok(Self::Text),
-            "Integer" => Ok(Self::Integer),
-            "Decimal" => Ok(Self::Decimal),
-            "Switch" => Ok(Self::Switch),
-            _ => Err("Text, Integer, Decimal or Switch"),
-        }
-    }
-}
-
+#[derive(Debug)]
 pub enum Validator {
     Range(i32, i32),
     Regex(Box<str>),
     Switch(Box<[StringExpression]>),
 }
 
+#[derive(Debug)]
 pub enum MatchPattern<'a> {
+    Any,
     Variable(&'a str),
     Value(Value),
 }
+
+#[derive(Debug)]
 pub struct MatchCase<'a> {
-    pattern: MatchPattern<'a>,
-    expression: Box<[Compound<'a>]>,
+    patterns: Box<[MatchPattern<'a>]>,
+    expression: Expression<'a>,
 }
+
+#[derive(Debug)]
 pub enum Compound<'a> {
     Declaration {
         identifier: &'a str,
@@ -60,51 +61,165 @@ pub fn first_pass(tokens: Vec<Node<Token>>) -> NodeCollection<Compound> {
     let mut collection = NodeCollection::new();
 
     while let some_node!(data, position) = iter.next() {
-        match data {
-            Token::Identifier(identifier) => declaration(&mut iter, &mut collection, identifier, position),
-            Token::Symbol('>') => prompt(&mut iter, &mut collection, position),
-            Token::Symbol(':') => validator(&mut iter, &mut collection),
-
-            _ => collection.throw(Error::Invalid { received: Box::from(format!("{}", data)), position }),
-        }
+        top_most(&mut iter, &mut collection, data, position);
     }
 
     return collection;
 }
 
-fn validator(mut iter: &mut NodeIter<Token>, mut collection: &mut NodeCollection<Compound>) {
-    if !matches!(iter.peek(), some_node!(Token::Symbol(':'))) {
-        //No error needed in case of a single colon
-        iter.skip();
+fn top_most<'a>(mut iter: &mut NodeIter<Token<'a>>, mut collection: &mut NodeCollection<Compound<'a>>, data: Token<'a>, position: Position) {
+    match data {
+        Token::Identifier(identifier) => field_declaration(iter, collection, identifier, position),
+        Token::Symbol('>') => field_prompt(iter, collection, position),
+        Token::Symbol(':') => field_validator(iter, collection),
+        Token::Segment("match") => match_statement(iter, collection, position),
+
+        _ => collection.throw(Error::Invalid { received: format!("{}", data), position }),
+    }
+}
+
+fn match_case_expression<'a>(iter: &mut NodeIter<Token<'a>>, collection: &mut NodeCollection<Compound>, position: Position) -> Expression<'a> {
+    let mut scope_collection: NodeCollection<Compound<'a>> = NodeCollection::new();
+
+    loop {
+        match iter.next() {
+            Some(node!(data, position)) => {
+                match data {
+                    Token::Symbol('}') => break,
+                    _ => top_most(iter, &mut scope_collection, data, position)
+                }
+            }
+
+            None => {
+                collection.throw(Error::EndOfFile { expected: String::from("'}'") });
+                break;
+            }
+        }
+    }
+
+    return match scope_collection {
+        NodeCollection::Ok(expression) => expression.into_boxed_slice(),
+        NodeCollection::Failed(errors) => {
+            collection.throw_all(errors);
+            Box::new([])
+        }
+    };
+}
+fn match_statement<'a>(iter: &mut NodeIter<Token<'a>>, collection: &mut NodeCollection<Compound<'a>>, position: Position) {
+    let identifier = match expect_node!(iter.next(), some_node!(Token::Identifier(identifier)) => identifier) {
+        Ok(identifier) => identifier,
+        Err(err) => {
+            collection.throw(err);
+            return;
+        }
+    };
+
+    if let Err(err) = expect_node!(iter.next(), some_node!(Token::Symbol('{'))) {
+        collection.throw(err);
         return;
     }
+
+    let mut patterns: Vec<MatchPattern> = Vec::new();
+    let mut cases: Vec<MatchCase> = Vec::new();
+    let mut seperator = false;
+
+    fn push_pattern(collection: &mut NodeCollection<Compound>, received: String, position: Position, seperator: &mut bool, callback: impl FnOnce()) {
+        if *seperator {
+            collection.throw(Error::Unexpected {
+                expected: String::from("'|'"),
+                received, position,
+            });
+        } else {
+            *seperator = true;
+            callback();
+        }
+    }
+
+    loop {
+        match iter.next() {
+            Some(node!(data, position)) => {
+                match data {
+                    Token::Symbol('}') => break,
+                    Token::Symbol('{') => {
+                        let boxed_patterns = patterns.into_boxed_slice();
+                        let expression = match_case_expression(iter, collection, position);
+
+                        cases.push(MatchCase { patterns: boxed_patterns, expression });
+
+                        seperator = false;
+                        patterns = Vec::new();
+                    }
+
+                    Token::Symbol('|') => {
+                        if seperator {
+                            seperator = false;
+                        } else {
+                            collection.throw(Error::Unexpected {
+                                expected: String::from("Pattern"),
+                                received: String::from("'|'"),
+                                position,
+                            });
+                        }
+                    }
+
+                    Token::Symbol('*') => push_pattern(collection, format!("{}", data), position, &mut seperator, || patterns.push(MatchPattern::Any)),
+                    Token::Identifier(identifier) => push_pattern(collection, format!("{}", data), position, &mut seperator, || patterns.push(MatchPattern::Variable(identifier))),
+                    Token::Value(value) => push_pattern(collection, format!("{}", value), position, &mut seperator, || patterns.push(MatchPattern::Value(value))),
+
+                    _ => {
+                        collection.throw(Error::Invalid {
+                            received: format!("{}", data),
+                            position,
+                        });
+
+                        return;
+                    }
+                }
+            }
+
+            None => {
+                collection.throw(Error::EndOfFile { expected: String::from("'}'") });
+                return;
+            }
+        }
+    }
+
+    collection.try_collect(|| Node::new(Compound::Match { identifier, cases: cases.into_boxed_slice() }, position));
+}
+
+fn field_validator(mut iter: &mut NodeIter<Token>, mut collection: &mut NodeCollection<Compound>) {
+    if !matches!(iter.peek(), some_node!(Token::Symbol(':'))) {
+        return;
+    }
+
+    iter.skip();
 
     match iter.next() {
         some_node!(data, position) => match data {
             Token::Value(Value::Range(RangeValue(begin, end))) => collection.try_collect(|| Node::new(Compound::Validator(Validator::Range(begin, end)), position)),
             Token::Value(Value::Regex(regex)) => collection.try_collect(|| Node::new(Compound::Validator(Validator::Regex(regex)), position)),
             Token::Symbol('[') => {
-                let options = collect_switch_options(&mut iter, &mut collection, &position);
-                
+                let options = collect_switch_options(iter, collection, &position);
+
                 if let Some(options) = options {
                     collection.try_collect(|| Node::new(Compound::Validator(Validator::Switch(options.into_boxed_slice())), position));
                 }
             }
 
             _ => collection.throw(Error::Unexpected {
-                expected: Box::from("Range, Regex or Symbol"),
-                received: Box::from(format!("{}", data)),
+                expected: String::from(VALIDATOR_VALUE_TYPES),
+                received: format!("{}", data),
                 position,
             }),
         }
 
         None => collection.throw(Error::EndOfFile {
-            expected: Box::from("Range, Regex or Symbol")
+            expected: String::from("Range, Regex or Symbol"),
         })
     }
 }
 
-fn prompt(iter: &mut NodeIter<Token>, collection: &mut NodeCollection<Compound>, position: Position) {
+fn field_prompt(iter: &mut NodeIter<Token>, collection: &mut NodeCollection<Compound>, position: Position) {
     let prompt = match expect_node!(iter.next(), some_node!(Token::Value(Value::String(str))) => str) {
         Ok(prompt) => prompt,
         Err(err) => {
@@ -116,24 +231,28 @@ fn prompt(iter: &mut NodeIter<Token>, collection: &mut NodeCollection<Compound>,
     collection.try_collect(|| Node::new(Compound::Prompt(prompt), position));
 }
 
-fn declaration<'a>(iter: &mut NodeIter<Token>, collection: &mut NodeCollection<Compound<'a>>, identifier: &'a str, position: Position) {
+fn field_declaration<'a>(iter: &mut NodeIter<Token>, collection: &mut NodeCollection<Compound<'a>>, identifier: &'a str, position: Position) {
     if let Err(err) = expect_node!(iter.next(), some_node!(Token::Symbol(':'))) {
         collection.throw(err);
         return;
     }
 
     if let NodeCollection::Ok(ref mut tokens) = collection {
-        let field_type = match expect_node!(iter.next(), some_node!(Token::Segment(type_name)) => type_name) {
-            Ok(identifier) => match FieldType::from_str(identifier) {
-                Ok(field_type) => field_type,
-                Err(err) => {
-                    collection.throw(Error::Other { message: Box::from(err), position });
-                    return;
-                }
-            },
-
+        let type_name = match expect_node!(iter.next(), some_node!(Token::Segment(type_name)) => type_name) {
+            Ok(field_type) => field_type,
             Err(err) => {
                 collection.throw(err);
+                return;
+            }
+        };
+
+        let field_type = match type_name {
+            "Text" => FieldType::Text,
+            "Integer" => FieldType::Integer,
+            "Decimal" => FieldType::Decimal,
+            "Switch" => FieldType::Switch,
+            _ => {
+                collection.throw(Error::Other { message: String::from("Text, Integer, Decimal or Switch"), position });
                 return;
             }
         };
@@ -156,8 +275,8 @@ fn collect_switch_options(iter: &mut NodeIter<Token>, collection: &mut NodeColle
                 Token::Value(Value::String(expr)) => {
                     if coma {
                         collection.throw(Error::Unexpected {
-                            expected: Box::from("','"),
-                            received: Box::from("String"),
+                            expected: String::from("','"),
+                            received: String::from("String"),
                             position,
                         });
                     } else {
@@ -171,8 +290,8 @@ fn collect_switch_options(iter: &mut NodeIter<Token>, collection: &mut NodeColle
                         coma = false;
                     } else {
                         collection.throw(Error::Unexpected {
-                            expected: Box::from("String"),
-                            received: Box::from("','"),
+                            expected: String::from("String"),
+                            received: String::from("','"),
                             position,
                         });
                     }
@@ -180,8 +299,8 @@ fn collect_switch_options(iter: &mut NodeIter<Token>, collection: &mut NodeColle
 
                 _ => {
                     collection.throw(Error::Unexpected {
-                        expected: Box::from("Range, Regex or Symbol"),
-                        received: Box::from(format!("{}", data)),
+                        expected: String::from(VALIDATOR_VALUE_TYPES),
+                        received: format!("{}", data),
                         position,
                     });
 
@@ -190,7 +309,7 @@ fn collect_switch_options(iter: &mut NodeIter<Token>, collection: &mut NodeColle
             },
 
             None => {
-                collection.throw(Error::EndOfFile { expected: Box::from("Range, Regex or Symbol") });
+                collection.throw(Error::EndOfFile { expected: String::from(VALIDATOR_VALUE_TYPES) });
                 return None;
             }
         }

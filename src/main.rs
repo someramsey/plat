@@ -12,6 +12,7 @@ use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Seek, Write};
 use std::path::PathBuf;
 use peekmore::{PeekMore, PeekMoreIterator};
+use crate::task::layers::enviroment::first_pass::{first_pass, Compound};
 use crate::task::layers::fragmentize::fragmentize;
 use crate::task::layers::tokenize::tokenize;
 use crate::task::nodes::collection::NodeCollection;
@@ -96,23 +97,34 @@ fn main() {
     // }
     // return;
 
-    let tokens = tokenize(fragments);
-
-    match tokens {
-        NodeCollection::Ok(tokens) => {
-            for token in tokens {
-                println!("{:?}", token);
-            }
-        }
-
+    let tokens = match tokenize(fragments) {
+        NodeCollection::Ok(nodes) => nodes,
         NodeCollection::Failed(errors) => {
             for error in errors {
                 println!("{}", error);
             }
+            return;
         }
+    };
+    
+    // for token in tokens {
+    //     println!("{:?}", token);
+    // }
+    // return;
+
+    let compounds = match first_pass(tokens) {
+        NodeCollection::Ok(compounds) => compounds,
+        NodeCollection::Failed(errors) => {
+            for error in errors {
+                println!("{}", error);
+            }
+            return;
+        }
+    };
+
+    for compound in compounds {
+        println!("{:?}", compound);
     }
-
-
 
 
     return;

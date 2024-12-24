@@ -3,19 +3,19 @@ use std::fmt::{Display, Formatter};
 
 pub enum Error {
     Unexpected {
-        expected: Box<str>,
-        received: Box<str>,
+        expected: String,
+        received: String,
         position: Position,
     },
     Invalid {
-        received: Box<str>,
+        received: String,
         position: Position,
     },
     EndOfFile {
-        expected: Box<str>,
+        expected: String,
     },
     Other {
-        message: Box<str>,
+        message: String,
         position: Position,
     },
 }

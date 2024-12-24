@@ -11,25 +11,25 @@ $color: Switch > "What is your favorite color?" :: [
 
 match $age {
     0..12 {
-        $school: Input > "What is your school?"
+        $school: Text > "What is your school?"
     }
 
     13..18 {
-        $grade: Input > "What is your grade?"
+        $grade: Text > "What is your grade?"
     }
 
     19..25 {
-        $university: Input > "What is your university?"
+        $university: Text > "What is your university?"
     }
 
     * {
-        $job: Input > "What is your job?"
+        $job: Text > "What is your job?"
     }
 }
 
 match $color {
     "Red" {
-        $subcolor: Choice > "What is your favorite subcolor?" :: [
+        $subcolor: Switch > "What is your favorite subcolor?" :: [
             "Crimson",
             "Scarlet",
             "Ruby"
@@ -37,7 +37,7 @@ match $color {
     }
 
     "Green" {
-        $subcolor: Choice > "What is your favorite subcolor?" :: [
+        $subcolor: Switch > "What is your favorite subcolor?" :: [
             "Lime",
             "Emerald",
             "Forest"
@@ -45,7 +45,7 @@ match $color {
     }
 
     "Blue" | "Cyan" {
-        $subcolor: Choice > "What is your favorite subcolor?" :: [
+        $subcolor: Switch > "What is your favorite subcolor?" :: [
             "Sky",
             "Ocean",
             "Navy"
@@ -53,6 +53,6 @@ match $color {
     }
 
     * {
-        $subcolor: Input > "What is your favorite subcolor?"
+        $subcolor: Text > "What is your favorite subcolor?"
     }
 }

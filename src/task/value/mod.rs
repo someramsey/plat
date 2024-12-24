@@ -7,6 +7,8 @@ pub mod number;
 pub mod string;
 pub mod range;
 
+pub const ALL_VALUES: &str = "Regex, Range, String, Number";
+
 #[derive(Debug)]
 pub enum Value {
     Regex(Box<str>),
