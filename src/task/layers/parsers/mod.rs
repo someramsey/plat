@@ -1,1 +1,2 @@
-pub mod parse_script;
+pub mod commands;
+pub mod enviroment;

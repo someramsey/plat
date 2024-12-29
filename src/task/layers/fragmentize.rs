@@ -26,12 +26,6 @@ struct Cursor<'a> {
     tail: usize,
 }
 
-struct Iteration<'a> {
-    iterator: Chars<'a>,
-    position: Position,
-    current: Option<char>
-}
-
 impl<'a> Cursor<'a> {
     fn new(data: &'a str) -> Cursor {
         Cursor {
@@ -58,6 +52,11 @@ impl<'a> Cursor<'a> {
     }
 }
 
+struct Iteration<'a> {
+    iterator: Chars<'a>,
+    position: Position,
+    current: Option<char>
+}
 impl Iteration<'_> {
     fn new(data: &str) -> Iteration {
         let mut iterator = data.chars();

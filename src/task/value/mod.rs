@@ -11,7 +11,7 @@ pub const ALL_VALUES: &str = "Regex, Range, String, Number";
 
 #[derive(Debug)]
 pub enum Value {
-    Regex(Box<str>),
+    Regex(String),
     Range(RangeValue),
     String(StringExpression),
     Number(NumberValue),

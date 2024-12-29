@@ -39,6 +39,30 @@ macro_rules! expect_node {
             None => Err(Error::EndOfFile { expected: String::from(stringify!($expected)) })
         }
     };
+
+     ($node:expr, $expected: expr, $($pattern:pat => $result:expr),+) => {
+        match $node {
+            $($pattern => Ok($result)),*,
+            some_node!(other, position) => Err(Error::Unexpected { expected: String::from($expected), received: format!("{}", other), position: position.clone() }),
+            None => Err(Error::EndOfFile { expected: String::from($expected) })
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! expect_node_optional {
+    ($iter: expr, $pattern: pat => $action: expr) => {
+        $iter.next_if(|node| match &node.data {
+            $pattern => true,
+            _ => false
+        }).map(|node| {
+            if let $pattern = node.data {
+                $action
+            } else {
+                unreachable!()
+            }
+        })
+    };
 }
 
 pub struct Node<T> {

@@ -5,23 +5,40 @@ use std::vec::IntoIter;
 
 pub struct NodeIter<T> {
     pub iter: PeekMoreIterator<IntoIter<Node<T>>>,
-    pub position: Position
+    pub position: Position,
+    pub done: bool,
 }
 
 impl<T> NodeIter<T> {
     pub fn new(vec: Vec<Node<T>>) -> NodeIter<T> {
-        NodeIter { iter: vec.into_iter().peekmore(), position: Position::new() }
+        NodeIter {
+            iter: vec.into_iter().peekmore(),
+            position: Position::new(),
+            done: false,
+        }
+    }
+
+    pub fn next_if(&mut self, condition: fn(&Node<T>) -> bool) -> Option<Node<T>> {
+        let val = self.iter.next_if(condition);
+        self.next_internal(val)
     }
 
     pub fn next(&mut self) -> Option<Node<T>> {
         let val = self.iter.next();
+        self.next_internal(val)
+    }
 
-        if let Some(node) = val {
-            self.position = node.position.clone();
-            return Some(node);
+    fn next_internal(&mut self, val: Option<Node<T>>) -> Option<Node<T>> {
+        match val {
+            Some(node) => {
+                self.position = node.position.clone();
+                Some(node)
+            }
+            None => {
+                self.done = true;
+                None
+            }
         }
-
-        return None;
     }
 
     pub fn peek(&mut self) -> Option<&Node<T>> {
@@ -51,6 +68,6 @@ impl<T> NodeIter<T> {
 
         if let Some(node) = self.iter.next() {
             self.position = node.position.clone();
-        } 
+        }
     }
 }

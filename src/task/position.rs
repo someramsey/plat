@@ -19,7 +19,7 @@ impl Clone for Position {
 
 impl Position {
     pub fn new() -> Self {
-        Position { line: 0, column: 0 }
+        Position { line: 1, column: 0 }
     }
     pub fn newline(&mut self) {
         self.line += 1;

@@ -5,7 +5,7 @@ use crate::task::nodes::iterator::NodeIter;
 use crate::task::nodes::node::Node;
 use crate::task::value::number::NumberValue;
 use crate::task::value::range::RangeValue;
-use crate::task::value::string::{StringExpression, StringExpressionPart};
+use crate::task::value::string::{StringExpression, StringExpressionPart, StringExpressionPartKind};
 use crate::task::value::Value;
 use crate::{expect_node, node, nodes, some_node};
 use std::fmt::{Debug, Display, Formatter};
@@ -132,7 +132,7 @@ fn capture_regex<'a>(iter: &mut NodeIter<Fragment<'a>>) -> Result<Token<'a>, Err
             }
 
             Fragment::Symbol('/') => {
-                return Ok(Token::Value(Value::Regex(data.into_boxed_str())));
+                return Ok(Token::Value(Value::Regex(data)));
             }
 
             Fragment::Numeric(slice) |
@@ -147,7 +147,8 @@ fn capture_regex<'a>(iter: &mut NodeIter<Fragment<'a>>) -> Result<Token<'a>, Err
 
 fn capture_string<'a>(iter: &mut NodeIter<Fragment<'a>>) -> Result<Token<'a>, Error> {
     let mut buf = String::new();
-    let mut expr: Vec<StringExpressionPart> = Vec::new();
+    let mut expr: StringExpression = StringExpression::new();
+
     let mut last_was_symbol = true;
 
     while let Some(fragment) = iter.peek() {
@@ -183,23 +184,33 @@ fn capture_string<'a>(iter: &mut NodeIter<Fragment<'a>>) -> Result<Token<'a>, Er
                         iter.next();
 
                         if !buf.is_empty() {
-                            expr.push(StringExpressionPart::Literal(buf.into_boxed_str()));
+                            expr.push(StringExpressionPart {
+                                kind: StringExpressionPartKind::Literal,
+                                value: buf.clone()
+                            });
                         }
 
-                        return Ok(Token::Value(Value::String(StringExpression::new(expr))));
+                        return Ok(Token::Value(Value::String(expr)));
                     }
 
                     '$' => {
+                        iter.skip();
+                        
                         if !buf.is_empty() {
-                            expr.push(StringExpressionPart::Literal(buf.clone().into_boxed_str()));
+                            expr.push(StringExpressionPart {
+                                kind: StringExpressionPartKind::Literal,
+                                value: buf.clone()
+                            });
                         }
 
                         match expect_node!(iter.peek(), some_node!(Fragment::AlphaNumeric(slice)) => slice) {
                             Ok(slice) => {
                                 let slice = *slice;
 
-                                iter.skip();
-                                expr.push(StringExpressionPart::Variable(Box::from(slice)))
+                                expr.push(StringExpressionPart {
+                                    kind: StringExpressionPartKind::Variable,
+                                    value: String::from(slice)
+                                });
                             },
 
                             Err(err) => return Err(err)

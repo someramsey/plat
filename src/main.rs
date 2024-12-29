@@ -12,8 +12,9 @@ use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Seek, Write};
 use std::path::PathBuf;
 use peekmore::{PeekMore, PeekMoreIterator};
-use crate::task::layers::enviroment::first_pass::{first_pass, Compound};
+use task::layers::parsers::enviroment::{parse_enviroment, Statement};
 use crate::task::layers::fragmentize::fragmentize;
+use crate::task::layers::parsers::commands::parse_commands;
 use crate::task::layers::tokenize::tokenize;
 use crate::task::nodes::collection::NodeCollection;
 
@@ -82,9 +83,8 @@ fn load(origin: PathBuf, target: PathBuf, progress_bar: ProgressBar) {
     fs_extra::dir::copy(&origin, &target, &options).expect("Copy files");
 }
 
-
 fn main() {
-    let file = File::open("src/.platenv").expect("Read test file");
+    let file = File::open("src/.plat").expect("Read test file");
     let mut reader = BufReader::new(&file);
 
     let mut data = String::new();
@@ -112,7 +112,7 @@ fn main() {
     // }
     // return;
 
-    let compounds = match first_pass(tokens) {
+    let compounds = match parse_commands(tokens) {
         NodeCollection::Ok(compounds) => compounds,
         NodeCollection::Failed(errors) => {
             for error in errors {

@@ -1,3 +1,13 @@
-attt "aaaa" {
+at "aaaa" {
     copy at $a to "really long string b/$c";
 }
+
+to "dw" {
+
+}
+
+copy {
+    at $a to $b;
+}
+
+write "dw" for /abc/ to $b;
