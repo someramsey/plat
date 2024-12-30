@@ -8,6 +8,7 @@ pub enum Error {
         position: Position,
     },
     Invalid {
+        message: String,
         received: String,
         position: Position,
     },
@@ -28,24 +29,26 @@ impl Display for Error {
             }
 
             Error::Unexpected { expected, received, position } => {
-                write!(f, "Expected '{}', found '{}' at {}:{}",
+                write!(f, "Expected '{}', found '{}' at {}",
                        expected,
                        received,
-                       position.line,
-                       position.column
+                       position
                 )
             }
 
             Error::Other { message, position } => {
-                write!(f, "Internal error: '{}' at {}:{}",
+                write!(f, "Internal error: '{}' at {}",
                        message,
-                       position.line,
-                       position.column
+                       position
                 )
             },
 
-            Error::Invalid { received, position } => {
-                write!(f, "Invalid: '{}'", received)
+            Error::Invalid { message, received, position } => {
+                write!(f, "Invalid ({}): Found '{}' at {}",
+                       message,
+                       received,
+                       position
+                )
             }
         }
     }

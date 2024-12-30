@@ -26,12 +26,16 @@ pub enum StringSource<'a> {
 }
 
 #[derive(Clone, Debug)]
-pub enum Block<'a> {
-    Copy,
-    Write(Vec<StringSource<'a>>),
+pub enum Modifier<'a> {
     At(Vec<StringSource<'a>>),
     To(Vec<StringSource<'a>>),
-    For(Arc<()>),
+    For(String),
+}
+
+#[derive(Clone)]
+pub enum Command<'a> {
+    Copy(Position),
+    Write(StringSource<'a>, Position),
 }
 
 
@@ -42,82 +46,89 @@ pub enum Instruction<'a> {
         target: Box<[StringSource<'a>]>,
     },
     Write {
-        value: Box<[StringSource<'a>]>,
-        selector: (),
+        value: StringSource<'a>,
+        selector: String,
         target: Box<[StringSource<'a>]>,
     },
-}
-
-fn variant_eq<T>(a: &T, b: &T) -> bool {
-    std::mem::discriminant(a) == std::mem::discriminant(b)
 }
 
 pub fn parse_commands(tokens: Vec<Node<Token>>) -> NodeCollection<Instruction> {
     let mut collection = NodeCollection::new();
     let mut iter = NodeIter::new(tokens);
 
-    let mut stack = Vec::new();
+    let mut stack: Vec<Modifier> = Vec::new();
+    let mut command: Option<Command> = None;
 
-    while let some_node!(data) = iter.peek() {
+    while let some_node!(data, position) = iter.peek() {
         match data {
             Token::Symbol(';') => {
-                iter.skip();
+                submit_stack(&mut collection, stack, command, position);
 
-                println!("Stack: {:?}", stack);
+                stack = Vec::new();
+                command = None;
+
+                iter.skip();
             }
 
             Token::Symbol('{') => {
                 iter.skip();
-                scope(&mut iter, &mut collection, &mut stack);
+                scope(&mut iter, &mut collection, stack, command);
+
+                stack = Vec::new();
+                command = None;
             }
 
-            _ => block(&mut iter, &mut collection, &mut stack)
+            _ => keyword(&mut iter, &mut collection, &mut stack, &mut command),
         }
     }
 
     return collection;
 }
 
-fn merge_duplicates(stack: &mut Vec<Block>) {
-    let mut i = 0;
-    while i < stack.len() {
-        let mut vec = Vec::new();
-        vec.push(stack[i].clone());
 
-        let mut j = i + 1;
-        while j < stack.len() {
-            if i != j && variant_eq(&stack[i], &stack[j]) {
-                vec.push(stack[j].clone());
-                stack.remove(j);
+fn scope<'a>(iter: &mut NodeIter<Token<'a>>, collection: &mut NodeCollection<Instruction<'a>>, stack: Vec<Modifier<'a>>, command: Option<Command<'a>>) {
+    let mut scope_stack = stack.clone();
+    let mut scope_command = command.clone();
+
+    while let some_node!(data, position) = iter.peek() {
+        match data {
+            Token::Symbol('}') => {
+                iter.skip();
+                return;
             }
 
-            j += 1;
+            Token::Symbol('{') => {
+                iter.skip();
+                scope(iter, collection, scope_stack, scope_command);
+
+                scope_stack = stack.clone();
+                scope_command = command.clone();
+            }
+
+            Token::Symbol(';') => {
+                submit_stack(collection, scope_stack, scope_command, position);
+
+                scope_stack = stack.clone();
+                scope_command = command.clone();
+
+                iter.skip();
+            }
+
+            _ => keyword(iter, collection, &mut scope_stack, &mut scope_command),
         }
-
-        stack.remove(i);
-        i += 1;
-    }
-}
-
-fn scope<'a>(iter: &mut NodeIter<Token<'a>>, collection: &mut NodeCollection<Instruction<'a>>, stack: &mut Vec<Block<'a>>) {
-    while let some_node!(data) = iter.peek() {
-        if let Token::Symbol('}') = data {
-            iter.skip();
-            return;
-        }
-
-        block(iter, collection, &mut stack.clone());
     }
 
     collection.throw(Error::EndOfFile { expected: String::from("'}'") });
 }
 
-fn block<'a>(iter: &mut NodeIter<Token<'a>>, collection: &mut NodeCollection<Instruction<'a>>, stack: &mut Vec<Block<'a>>) {
+fn keyword<'a>(iter: &mut NodeIter<Token<'a>>, collection: &mut NodeCollection<Instruction<'a>>, stack: &mut Vec<Modifier<'a>>, command: &mut Option<Command<'a>>) {
     expect_node!(iter.next(), "Keyword", some_node!(Token::Segment(keyword), position) => {
         match keyword {
-            "at" => at(iter, collection, stack),
-            "to" => to(iter, collection, stack),
-            "copy" => copy(stack, collection, position),
+            "at" => at_modifier(iter, collection, stack),
+            "to" => to_modifier(iter, collection, stack),
+            "for" => for_modifier(iter, collection, stack, position),
+            "copy" => copy(collection, command, position),
+            "write" => write(iter, collection, command, position),
 
             _ => {
                 collection.throw(Error::Unexpected {
@@ -130,45 +141,168 @@ fn block<'a>(iter: &mut NodeIter<Token<'a>>, collection: &mut NodeCollection<Ins
     }).map_err(|err| collection.throw(err));
 }
 
-fn single_param<'a>(iter: &mut NodeIter<Token<'a>>, collection: &mut NodeCollection<Instruction<'a>>) -> Result<StringSource<'a>, Error> {
+fn string_param<'a>(iter: &mut NodeIter<Token<'a>>, collection: &mut NodeCollection<Instruction<'a>>) -> Result<StringSource<'a>, Error> {
     expect_node!(iter.next(), "String, Identifier or Scope",
         some_node!(Token::Value(Value::String(expr))) => StringSource::Expression(expr),
         some_node!(Token::Identifier(identifier)) => StringSource::Variable(identifier)
     )
 }
 
-macro_rules! push_block {
-    ($stack:expr, $block_variant:ident, $param:expr) => {
-        if let Some(Block::$block_variant(vec)) = $stack.iter_mut().find(|block| matches!(block, Block::$block_variant(_))) {
+macro_rules! push_or_merge_modifier {
+    ($stack:expr, $variant:ident, $param:expr) => {
+        if let Some(Modifier::$variant(vec)) = $stack.iter_mut().find(|modifier| matches!(modifier, Modifier::$variant(_))) {
             vec.push($param);
         } else {
-            $stack.push(Block::$block_variant(vec![$param]));
+            $stack.push(Modifier::$variant(vec![$param]));
         }
     };
 }
 
-fn at<'a>(iter: &mut NodeIter<Token<'a>>, collection: &mut NodeCollection<Instruction<'a>>, stack: &mut Vec<Block<'a>>) {
-    let param = guard!(single_param(iter, collection)
+fn at_modifier<'a>(iter: &mut NodeIter<Token<'a>>, collection: &mut NodeCollection<Instruction<'a>>, stack: &mut Vec<Modifier<'a>>) {
+    let param = guard!(string_param(iter, collection)
         .map_err(|err| collection.throw(err)));
 
-    push_block!(stack, At, param);
+    push_or_merge_modifier!(stack, At, param);
 }
 
-fn to<'a>(iter: &mut NodeIter<Token<'a>>, collection: &mut NodeCollection<Instruction<'a>>, stack: &mut Vec<Block<'a>>) {
-    let param = guard!(single_param(iter, collection)
+fn to_modifier<'a>(iter: &mut NodeIter<Token<'a>>, collection: &mut NodeCollection<Instruction<'a>>, stack: &mut Vec<Modifier<'a>>) {
+    let param = guard!(string_param(iter, collection)
         .map_err(|err| collection.throw(err)));
 
-    push_block!(stack, To, param);
+    push_or_merge_modifier!(stack, To, param);
 }
 
-fn copy<'a>(stack: &mut Vec<Block<'a>>, collection: &mut NodeCollection<Instruction<'a>>, position: Position) {
-    if stack.iter().any(|block| matches!(block, Block::Copy)) {
-        collection.throw(Error::Unexpected {
-            expected: String::from("Copy block"),
-            received: String::from("Copy block"),
-            position
+fn for_modifier<'a>(iter: &mut NodeIter<Token<'a>>, collection: &mut NodeCollection<Instruction<'a>>, stack: &mut Vec<Modifier<'a>>, position: Position) {
+    let param = guard!(expect_node!(iter.next(), "Regex", some_node!(Token::Value(Value::Regex(str))) => str)
+        .map_err(|err| collection.throw(err)));
+
+    if stack.iter().any(|modifier| matches!(modifier, Modifier::For(_))) {
+        collection.throw(Error::Invalid {
+            message: String::from("For command can not be chained multiple times."),
+            received: String::from("for"),
+            position,
         });
     } else {
-        stack.push(Block::Copy);
+        stack.push(Modifier::For(param));
     }
 }
+
+fn copy<'a>(collection: &mut NodeCollection<Instruction<'a>>, command: &mut Option<Command<'a>>, position: Position) {
+    match command {
+        Some(_) => collection.throw(Error::Other {
+            message: String::from("Copy command can not be chained multiple times."),
+            position,
+        }),
+
+        None => *command = Some(Command::Copy(position)),
+    }
+}
+
+fn write<'a>(iter: &mut NodeIter<Token<'a>>, collection: &mut NodeCollection<Instruction<'a>>, command: &mut Option<Command<'a>>, position: Position) {
+    match command {
+        Some(_) => collection.throw(Error::Other {
+            message: String::from("Write command can not be chained multiple times."),
+            position,
+        }),
+
+        None => {
+            let param = guard!(string_param(iter, collection)
+                .map_err(|err| collection.throw(err)));
+
+            *command = Some(Command::Write(param, position));
+        }
+    }
+}
+
+fn submit_stack<'a>(collection: &mut NodeCollection<Instruction<'a>>, stack: Vec<Modifier<'a>>, command: Option<Command<'a>>, position: &Position) {
+    let Some(command) = command else {
+        collection.throw(Error::Other {
+            message: String::from("Chain does not contain an active command."),
+            position: position.clone(),
+        });
+        return;
+    };
+
+    match command {
+        Command::Copy(position) => {
+            let mut source: Option<Box<[StringSource]>> = None;
+            let mut target: Option<Box<[StringSource]>> = None;
+
+            for modifier in stack {
+                match modifier {
+                    Modifier::At(vec) => source = Some(vec.into_boxed_slice()),
+                    Modifier::To(vec) => target = Some(vec.into_boxed_slice()),
+
+                    _ => collection.throw(Error::Other {
+                        message: String::from("Copy command can only be used under 'at' and 'to' modifiers."),
+                        position: position.clone(),
+                    })
+                }
+            }
+
+            let Some(source) = source else {
+                collection.throw(Error::Other {
+                    message: String::from("Copy command requires an 'at' modifier."),
+                    position: position.clone(),
+                });
+
+                return;
+            };
+
+            let Some(target) = target else {
+                collection.throw(Error::Other {
+                    message: String::from("Copy command requires a 'to' modifier."),
+                    position: position.clone(),
+                });
+
+                return;
+            };
+
+            collection.try_push(|| Node::new(
+                Instruction::Copy { source, target },
+                position.clone(),
+            ));
+        }
+
+        Command::Write(value, position) => {
+            let mut selector: Option<String> = None;
+            let mut target: Option<Box<[StringSource]>> = None;
+
+            for modifier in stack {
+                match modifier {
+                    Modifier::For(str) => selector = Some(str),
+                    Modifier::To(vec) => target = Some(vec.into_boxed_slice()),
+
+                    _ => collection.throw(Error::Other {
+                        message: String::from("Write command can only be used under 'for' and 'to' modifiers."),
+                        position: position.clone(),
+                    })
+                }
+            }
+
+            let Some(selector) = selector else {
+                collection.throw(Error::Other {
+                    message: String::from("Write command requires a 'for' modifier."),
+                    position: position.clone(),
+                });
+
+                return;
+            };
+
+            let Some(target) = target else {
+                collection.throw(Error::Other {
+                    message: String::from("Write command requires a 'to' modifier."),
+                    position: position.clone(),
+                });
+
+                return;
+            };
+
+            collection.try_push(|| Node::new(
+                Instruction::Write { value, selector, target },
+                position.clone(),
+            ));
+        }
+    }
+}
+

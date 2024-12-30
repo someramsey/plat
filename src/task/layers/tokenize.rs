@@ -211,6 +211,8 @@ fn capture_string<'a>(iter: &mut NodeIter<Fragment<'a>>) -> Result<Token<'a>, Er
                                     kind: StringExpressionPartKind::Variable,
                                     value: String::from(slice)
                                 });
+                                
+                                buf.clear();
                             },
 
                             Err(err) => return Err(err)

@@ -72,7 +72,7 @@ fn top_most<'a>(mut iter: &mut NodeIter<Token<'a>>, mut collection: &mut NodeCol
         Token::Identifier(identifier) => field_declaration_statement(iter, collection, identifier, position),
         Token::Segment("match") => match_statement(iter, collection, position),
 
-        _ => collection.throw(Error::Invalid { received: format!("{}", data), position }),
+        _ => collection.throw(Error::Invalid { message: String::from("Unrecognized Token"), received: format!("{}", data), position }),
     }
 }
 
@@ -167,6 +167,7 @@ fn match_statement<'a>(iter: &mut NodeIter<Token<'a>>, collection: &mut NodeColl
 
                     _ => {
                         collection.throw(Error::Invalid {
+                            message: String::from("Unrecognized Token inside pattern"),
                             received: format!("{}", data),
                             position,
                         });

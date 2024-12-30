@@ -1,13 +1,12 @@
-at "aaaa" {
-    copy at $a to "really long string b/$c";
-}
-
-to "dw" {
-
-}
-
 copy {
     at $a to $b;
+    at $b to $c;
 }
 
-write "dw" for /abc/ to $b;
+at "aa" {
+    copy at $a to "really long string b/$c thing";
+}
+
+write "a"
+for /some regex/
+to "b";
